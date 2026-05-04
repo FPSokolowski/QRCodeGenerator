@@ -1,0 +1,114 @@
+html {
+  font-size: 14px;
+}
+
+@media (min-width: 768px) {
+  html {
+    font-size: 16px;
+  }
+}
+
+.btn:focus, .btn:active:focus, .btn-link.nav-link:focus, .form-control:focus, .form-check-input:focus {
+  box-shadow: 0 0 0 0.1rem white, 0 0 0 0.25rem #258cfb;
+}
+
+html {
+  position: relative;
+  min-height: 100%;
+}
+
+body {
+  margin-bottom: 60px;
+  background: #f5f7fb;
+  color: #152238;
+}
+
+.form-floating > .form-control-plaintext::placeholder, .form-floating > .form-control::placeholder {
+  color: var(--bs-secondary-color);
+  text-align: end;
+}
+
+.form-floating > .form-control-plaintext:focus::placeholder, .form-floating > .form-control:focus::placeholder {
+  text-align: start;
+}
+
+.qr-shell {
+  display: grid;
+  min-height: calc(100vh - 170px);
+  place-items: center;
+  padding: 3rem 0;
+}
+
+.qr-panel {
+  width: min(100%, 760px);
+  padding: 2rem;
+  background: #ffffff;
+  border: 1px solid #d9e1ee;
+  border-radius: 8px;
+  box-shadow: 0 20px 55px rgba(21, 34, 56, 0.09);
+}
+
+.qr-heading {
+  margin-bottom: 1.5rem;
+}
+
+.qr-heading h1 {
+  margin-bottom: 0.5rem;
+  font-weight: 700;
+}
+
+.qr-heading p {
+  margin-bottom: 0;
+  color: #5c6b80;
+}
+
+.qr-kicker {
+  color: #0d6efd !important;
+  font-size: 0.85rem;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.qr-form .input-group {
+  align-items: stretch;
+}
+
+.qr-preview {
+  width: min(100%, 320px);
+  aspect-ratio: 1;
+  image-rendering: pixelated;
+}
+
+.download-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 1.5rem;
+}
+
+.download-actions form {
+  margin: 0;
+}
+
+@media (max-width: 575.98px) {
+  .qr-panel {
+    padding: 1.25rem;
+  }
+
+  .qr-form .input-group {
+    display: grid;
+    gap: 0.75rem;
+  }
+
+  .qr-form .btn,
+  .download-actions .btn {
+    width: 100%;
+  }
+
+  .download-actions,
+  .download-actions form {
+    width: 100%;
+  }
+}

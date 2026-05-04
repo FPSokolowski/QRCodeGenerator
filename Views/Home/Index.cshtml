@@ -1,0 +1,64 @@
+@model QRCodeGenerator.Models.QrCodeViewModel
+
+@{
+    ViewData["Title"] = "Generator QR";
+}
+
+<section class="qr-shell">
+    <div class="qr-panel">
+        <div class="qr-heading">
+            <p class="qr-kicker">Statyczne kody QR</p>
+            <h1>Generator QR</h1>
+            <p>Wpisz tekst, wygeneruj kod i zapisz go lokalnie w wybranym formacie.</p>
+        </div>
+
+        <form asp-action="Index" method="post" class="qr-form">
+            @Html.AntiForgeryToken()
+            <label asp-for="Text" class="form-label"></label>
+            <div class="input-group input-group-lg">
+                <input asp-for="Text" class="form-control" placeholder="np. https://example.com albo dowolny tekst" autocomplete="off" />
+                <button class="btn btn-primary" type="submit">Generuj</button>
+            </div>
+            <span asp-validation-for="Text" class="text-danger"></span>
+        </form>
+    </div>
+</section>
+
+@if (Model.ShowResult)
+{
+    <div class="modal fade" id="qrResultModal" tabindex="-1" aria-labelledby="qrResultModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2 class="modal-title fs-5" id="qrResultModalLabel">Wygenerowany kod QR</h2>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zamknij"></button>
+                </div>
+                <div class="modal-body text-center">
+                    <img class="qr-preview" src="@Model.PngDataUri" alt="Wygenerowany kod QR" />
+                    <div class="download-actions">
+                        @foreach (var format in Model.Formats)
+                        {
+                            <form asp-action="Download" method="post">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="text" value="@Model.Text" />
+                                <input type="hidden" name="format" value="@format.Value" />
+                                <button class="btn btn-outline-primary" type="submit">Zapisz @format.Label</button>
+                            </form>
+                        }
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@section Scripts {
+    <partial name="_ValidationScriptsPartial" />
+    @if (Model.ShowResult)
+    {
+        <script>
+            const qrModal = new bootstrap.Modal(document.getElementById('qrResultModal'));
+            qrModal.show();
+        </script>
+    }
+}
