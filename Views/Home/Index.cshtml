@@ -1,605 +1,660 @@
 @model QRCodeGenerator.Models.QrCodeViewModel
+@using QRCodeGenerator.Services
 
 @{
-    ViewData["Title"] = "Generator QR";
+    var language = Model.Language;
+    ViewData["Title"] = UiText.Get(language, "HeroTitle");
+    var hasResult = Model.ShowResult;
+    var generatedPayload = Model.GeneratedPayload ?? string.Empty;
+    var isValidated = Model.ValidationResult is not null;
+    var readabilityStars = Model.ValidationResult is null ? 0 : (int)Math.Ceiling(Model.ValidationResult.ReadabilityScore / 20.0);
+    var printSafetyStars = Model.ValidationResult is null ? 0 : (int)Math.Ceiling(Model.ValidationResult.PrintSafetyScore / 20.0);
+    var contentIcons = new Dictionary<string, string>
+    {
+        ["general"] = "edit_note",
+        ["url"] = "link",
+        ["wifi"] = "wifi",
+        ["vcard"] = "person",
+        ["email"] = "mail",
+        ["sms"] = "sms",
+        ["phone"] = "call",
+        ["geo"] = "location_on",
+        ["event"] = "event",
+        ["crypto"] = "account_balance_wallet",
+        ["app"] = "apps",
+        ["pdf"] = "picture_as_pdf",
+        ["social"] = "alternate_email",
+        ["multilink"] = "hub",
+        ["plain"] = "notes"
+    };
 }
 
-<section class="qr-shell">
-    <div class="qr-panel">
-        <div class="qr-heading">
-            <p class="qr-kicker">Statyczne kody QR</p>
-            <h1>Generator QR</h1>
-            <p>Wpisz tekst, wygeneruj kod i zapisz go lokalnie w wybranym formacie.</p>
+<section class="generator-stage">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <section class="hero-panel glass-panel">
+        <div class="hero-copy">
+            <span class="kicker">@UiText.Get(language, "HeroKicker")</span>
+            <h1>@UiText.Get(language, "HeroTitle")</h1>
+            <p>@UiText.Get(language, "HeroCopy")</p>
         </div>
 
-        <form asp-action="Index" method="post" enctype="multipart/form-data" class="qr-form">
-            @Html.AntiForgeryToken()
-            <div class="content-type-tabs" role="tablist" aria-label="Typ QR Content">
-                @foreach (var option in Model.ContentTypeOptions)
-                {
-                    var isChecked = Model.ContentType == option.Value;
-                    <input class="btn-check" type="radio" asp-for="ContentType" id="content-@option.Value" value="@option.Value" checked="@isChecked" />
-                    <label class="btn btn-outline-primary" for="content-@option.Value">@option.Label</label>
-                }
-            </div>
+        <div class="workspace-grid">
+            <form asp-action="Index" method="post" enctype="multipart/form-data" class="config-panel">
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-            <div class="content-panel" data-content-panel="general">
-                <label asp-for="Text" class="form-label"></label>
-                <textarea asp-for="Text" class="form-control form-control-lg" rows="3" placeholder="Dowolny tekst lub payload QR"></textarea>
-                <span asp-validation-for="Text" class="text-danger"></span>
-            </div>
+                <div class="field-block">
+                    <span class="field-label">@UiText.Get(language, "ContentType")</span>
+                    <div class="content-picker" role="radiogroup" aria-label="@UiText.Get(language, "ContentType")">
+                        @foreach (var option in Model.ContentTypeOptions)
+                        {
+                            var id = $"content-{option.Value}";
+                            var icon = contentIcons.TryGetValue(option.Value, out var iconName) ? iconName : "qr_code";
+                            <input class="visually-hidden content-radio" type="radio" asp-for="ContentType" id="@id" value="@option.Value" />
+                            <label class="content-chip" for="@id">
+                                <span class="material-symbols-outlined">@icon</span>
+                                <span>@UiText.Get(language, $"ContentType_{option.Value}")</span>
+                            </label>
+                        }
+                    </div>
+                </div>
 
-            <div class="content-panel" data-content-panel="url">
-                <label asp-for="Url" class="form-label"></label>
-                <input asp-for="Url" class="form-control form-control-lg" placeholder="https://example.com" />
-                <span asp-validation-for="Url" class="text-danger"></span>
-            </div>
+                <div class="field-block content-panel" data-content-panel="general">
+                    <label asp-for="Text" class="field-label">@UiText.Get(language, "Text")</label>
+                    <textarea asp-for="Text" class="neo-input" rows="4" placeholder="@UiText.Get(language, "TextPlaceholder")"></textarea>
+                    <span asp-validation-for="Text" class="field-error"></span>
+                </div>
 
-            <div class="content-panel" data-content-panel="wifi">
-                <div class="content-grid">
+                <div class="field-block content-panel" data-content-panel="url">
+                    <label asp-for="Url" class="field-label">@UiText.Get(language, "Url")</label>
+                    <input asp-for="Url" class="neo-input input-lg" placeholder="https://example.com" />
+                    <span asp-validation-for="Url" class="field-error"></span>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="wifi">
                     <div>
-                        <label asp-for="WifiSsid" class="form-label"></label>
-                        <input asp-for="WifiSsid" class="form-control" />
-                        <span asp-validation-for="WifiSsid" class="text-danger"></span>
+                        <label asp-for="WifiSsid" class="field-label">@UiText.Get(language, "WifiSsid")</label>
+                        <input asp-for="WifiSsid" class="neo-input" />
+                        <span asp-validation-for="WifiSsid" class="field-error"></span>
                     </div>
                     <div>
-                        <label asp-for="WifiPassword" class="form-label"></label>
-                        <input asp-for="WifiPassword" class="form-control" />
+                        <label asp-for="WifiPassword" class="field-label">@UiText.Get(language, "WifiPassword")</label>
+                        <input asp-for="WifiPassword" class="neo-input" />
                     </div>
                     <div>
-                        <label asp-for="WifiEncryption" class="form-label"></label>
-                        <select asp-for="WifiEncryption" class="form-select">
+                        <label asp-for="WifiEncryption" class="field-label">@UiText.Get(language, "WifiEncryption")</label>
+                        <select asp-for="WifiEncryption" class="neo-input">
                             <option value="WPA">WPA/WPA2</option>
                             <option value="WEP">WEP</option>
-                            <option value="nopass">Brak hasla</option>
+                            <option value="nopass">@UiText.Get(language, "NoPassword")</option>
                         </select>
                     </div>
-                    <div class="low-light-check">
-                        <div class="form-check form-switch">
-                            <input asp-for="WifiHidden" class="form-check-input" type="checkbox" />
-                            <label asp-for="WifiHidden" class="form-check-label"></label>
-                        </div>
+                    <label class="toggle-line">
+                        <input asp-for="WifiHidden" type="checkbox" />
+                        <span>@UiText.Get(language, "WifiHidden")</span>
+                    </label>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="vcard">
+                    <div>
+                        <label asp-for="VCardName" class="field-label">@UiText.Get(language, "VCardName")</label>
+                        <input asp-for="VCardName" class="neo-input" />
+                        <span asp-validation-for="VCardName" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="VCardCompany" class="field-label">@UiText.Get(language, "VCardCompany")</label>
+                        <input asp-for="VCardCompany" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardJobTitle" class="field-label">@UiText.Get(language, "VCardJobTitle")</label>
+                        <input asp-for="VCardJobTitle" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardPhone" class="field-label">@UiText.Get(language, "VCardPhone")</label>
+                        <input asp-for="VCardPhone" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardEmail" class="field-label">@UiText.Get(language, "VCardEmail")</label>
+                        <input asp-for="VCardEmail" class="neo-input" />
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="vcard">
-                <div class="content-grid">
+                <div class="form-grid content-panel" data-content-panel="email">
                     <div>
-                        <label asp-for="VCardName" class="form-label"></label>
-                        <input asp-for="VCardName" class="form-control" />
-                        <span asp-validation-for="VCardName" class="text-danger"></span>
+                        <label asp-for="EmailAddress" class="field-label">@UiText.Get(language, "EmailAddress")</label>
+                        <input asp-for="EmailAddress" class="neo-input" placeholder="hello@example.com" />
+                        <span asp-validation-for="EmailAddress" class="field-error"></span>
                     </div>
                     <div>
-                        <label asp-for="VCardCompany" class="form-label"></label>
-                        <input asp-for="VCardCompany" class="form-control" />
+                        <label asp-for="EmailSubject" class="field-label">@UiText.Get(language, "EmailSubject")</label>
+                        <input asp-for="EmailSubject" class="neo-input" />
                     </div>
-                    <div>
-                        <label asp-for="VCardPhone" class="form-label"></label>
-                        <input asp-for="VCardPhone" class="form-control" />
-                    </div>
-                    <div>
-                        <label asp-for="VCardEmail" class="form-label"></label>
-                        <input asp-for="VCardEmail" class="form-control" />
+                    <div class="span-all">
+                        <label asp-for="EmailBody" class="field-label">@UiText.Get(language, "EmailBody")</label>
+                        <textarea asp-for="EmailBody" class="neo-input" rows="3"></textarea>
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="email">
-                <div class="content-grid">
+                <div class="form-grid content-panel" data-content-panel="sms">
                     <div>
-                        <label asp-for="EmailAddress" class="form-label"></label>
-                        <input asp-for="EmailAddress" class="form-control" placeholder="hello@example.com" />
-                        <span asp-validation-for="EmailAddress" class="text-danger"></span>
+                        <label asp-for="PhoneNumber" class="field-label">@UiText.Get(language, "PhoneNumber")</label>
+                        <input asp-for="PhoneNumber" class="neo-input" />
+                        <span asp-validation-for="PhoneNumber" class="field-error"></span>
                     </div>
                     <div>
-                        <label asp-for="EmailSubject" class="form-label"></label>
-                        <input asp-for="EmailSubject" class="form-control" />
-                    </div>
-                    <div class="print-span">
-                        <label asp-for="EmailBody" class="form-label"></label>
-                        <textarea asp-for="EmailBody" class="form-control" rows="2"></textarea>
+                        <label asp-for="SmsMessage" class="field-label">@UiText.Get(language, "SmsMessage")</label>
+                        <input asp-for="SmsMessage" class="neo-input" />
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="sms">
-                <div class="content-grid">
+                <div class="field-block content-panel" data-content-panel="phone">
+                    <label asp-for="PhoneNumber" class="field-label">@UiText.Get(language, "PhoneNumber")</label>
+                    <input asp-for="PhoneNumber" class="neo-input input-lg" placeholder="+48123123123" />
+                    <span asp-validation-for="PhoneNumber" class="field-error"></span>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="geo">
                     <div>
-                        <label asp-for="PhoneNumber" class="form-label"></label>
-                        <input asp-for="PhoneNumber" class="form-control" />
-                        <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+                        <label asp-for="GeoLatitude" class="field-label">@UiText.Get(language, "GeoLatitude")</label>
+                        <input asp-for="GeoLatitude" class="neo-input" placeholder="52.2297" />
+                        <span asp-validation-for="GeoLatitude" class="field-error"></span>
                     </div>
                     <div>
-                        <label asp-for="SmsMessage" class="form-label"></label>
-                        <input asp-for="SmsMessage" class="form-control" />
+                        <label asp-for="GeoLongitude" class="field-label">@UiText.Get(language, "GeoLongitude")</label>
+                        <input asp-for="GeoLongitude" class="neo-input" placeholder="21.0122" />
+                        <span asp-validation-for="GeoLongitude" class="field-error"></span>
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="phone">
-                <label asp-for="PhoneNumber" class="form-label"></label>
-                <input asp-for="PhoneNumber" class="form-control form-control-lg" placeholder="+48123123123" />
-                <span asp-validation-for="PhoneNumber" class="text-danger"></span>
-            </div>
-
-            <div class="content-panel" data-content-panel="geo">
-                <div class="content-grid">
+                <div class="form-grid content-panel" data-content-panel="event">
                     <div>
-                        <label asp-for="GeoLatitude" class="form-label"></label>
-                        <input asp-for="GeoLatitude" class="form-control" placeholder="52.2297" />
-                        <span asp-validation-for="GeoLatitude" class="text-danger"></span>
+                        <label asp-for="EventTitle" class="field-label">@UiText.Get(language, "EventTitle")</label>
+                        <input asp-for="EventTitle" class="neo-input" />
+                        <span asp-validation-for="EventTitle" class="field-error"></span>
                     </div>
                     <div>
-                        <label asp-for="GeoLongitude" class="form-label"></label>
-                        <input asp-for="GeoLongitude" class="form-control" placeholder="21.0122" />
-                        <span asp-validation-for="GeoLongitude" class="text-danger"></span>
+                        <label asp-for="EventLocation" class="field-label">@UiText.Get(language, "EventLocation")</label>
+                        <input asp-for="EventLocation" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="EventStart" class="field-label">@UiText.Get(language, "EventStart")</label>
+                        <input asp-for="EventStart" class="neo-input" type="datetime-local" />
+                        <span asp-validation-for="EventStart" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EventEnd" class="field-label">@UiText.Get(language, "EventEnd")</label>
+                        <input asp-for="EventEnd" class="neo-input" type="datetime-local" />
+                        <span asp-validation-for="EventEnd" class="field-error"></span>
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="event">
-                <div class="content-grid">
+                <div class="form-grid content-panel" data-content-panel="crypto">
                     <div>
-                        <label asp-for="EventTitle" class="form-label"></label>
-                        <input asp-for="EventTitle" class="form-control" />
-                        <span asp-validation-for="EventTitle" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="EventLocation" class="form-label"></label>
-                        <input asp-for="EventLocation" class="form-control" />
-                    </div>
-                    <div>
-                        <label asp-for="EventStart" class="form-label"></label>
-                        <input asp-for="EventStart" class="form-control" type="datetime-local" />
-                        <span asp-validation-for="EventStart" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="EventEnd" class="form-label"></label>
-                        <input asp-for="EventEnd" class="form-control" type="datetime-local" />
-                        <span asp-validation-for="EventEnd" class="text-danger"></span>
-                    </div>
-                </div>
-            </div>
-
-            <div class="content-panel" data-content-panel="crypto">
-                <div class="content-grid">
-                    <div>
-                        <label asp-for="CryptoNetwork" class="form-label"></label>
-                        <select asp-for="CryptoNetwork" class="form-select">
+                        <label asp-for="CryptoNetwork" class="field-label">@UiText.Get(language, "CryptoNetwork")</label>
+                        <select asp-for="CryptoNetwork" class="neo-input">
                             <option value="bitcoin">BTC</option>
                             <option value="ethereum">ETH</option>
                         </select>
                     </div>
                     <div>
-                        <label asp-for="CryptoAmount" class="form-label"></label>
-                        <input asp-for="CryptoAmount" class="form-control" placeholder="0.01" />
+                        <label asp-for="CryptoAmount" class="field-label">@UiText.Get(language, "CryptoAmount")</label>
+                        <input asp-for="CryptoAmount" class="neo-input" placeholder="0.01" />
                     </div>
-                    <div class="print-span">
-                        <label asp-for="CryptoAddress" class="form-label"></label>
-                        <input asp-for="CryptoAddress" class="form-control" />
-                        <span asp-validation-for="CryptoAddress" class="text-danger"></span>
+                    <div class="span-all">
+                        <label asp-for="CryptoAddress" class="field-label">@UiText.Get(language, "CryptoAddress")</label>
+                        <input asp-for="CryptoAddress" class="neo-input" />
+                        <span asp-validation-for="CryptoAddress" class="field-error"></span>
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="app">
-                <label asp-for="AppStoreUrl" class="form-label"></label>
-                <input asp-for="AppStoreUrl" class="form-control form-control-lg" placeholder="https://apps.apple.com/... albo https://play.google.com/..." />
-                <span asp-validation-for="AppStoreUrl" class="text-danger"></span>
-            </div>
+                <div class="field-block content-panel" data-content-panel="app">
+                    <label asp-for="AppStoreUrl" class="field-label">@UiText.Get(language, "AppStoreUrl")</label>
+                    <input asp-for="AppStoreUrl" class="neo-input input-lg" placeholder="https://apps.apple.com/... / https://play.google.com/..." />
+                    <span asp-validation-for="AppStoreUrl" class="field-error"></span>
+                </div>
 
-            <div class="content-panel" data-content-panel="pdf">
-                <label asp-for="PdfUrl" class="form-label"></label>
-                <input asp-for="PdfUrl" class="form-control form-control-lg" placeholder="https://example.com/document.pdf" />
-                <span asp-validation-for="PdfUrl" class="text-danger"></span>
-            </div>
+                <div class="field-block content-panel" data-content-panel="pdf">
+                    <label asp-for="PdfUrl" class="field-label">@UiText.Get(language, "PdfUrl")</label>
+                    <input asp-for="PdfUrl" class="neo-input input-lg" placeholder="https://example.com/document.pdf" />
+                    <span asp-validation-for="PdfUrl" class="field-error"></span>
+                </div>
 
-            <div class="content-panel" data-content-panel="social">
-                <div class="content-grid">
+                <div class="form-grid content-panel" data-content-panel="social">
                     <div>
-                        <label asp-for="SocialPlatform" class="form-label"></label>
-                        <select asp-for="SocialPlatform" class="form-select">
-                            <option value="profile">Profil</option>
+                        <label asp-for="SocialPlatform" class="field-label">@UiText.Get(language, "SocialPlatform")</label>
+                        <select asp-for="SocialPlatform" class="neo-input">
                             <option value="instagram">Instagram</option>
                             <option value="linkedin">LinkedIn</option>
                             <option value="x">X</option>
                             <option value="facebook">Facebook</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="tiktok">TikTok</option>
                         </select>
                     </div>
                     <div>
-                        <label asp-for="SocialUrl" class="form-label"></label>
-                        <input asp-for="SocialUrl" class="form-control" placeholder="https://..." />
-                        <span asp-validation-for="SocialUrl" class="text-danger"></span>
+                        <label asp-for="SocialUrl" class="field-label">@UiText.Get(language, "SocialUrl")</label>
+                        <input asp-for="SocialUrl" class="neo-input" placeholder="https://instagram.com/..." />
+                        <span asp-validation-for="SocialUrl" class="field-error"></span>
                     </div>
                 </div>
-            </div>
 
-            <div class="content-panel" data-content-panel="multilink">
-                <label asp-for="MultiLinks" class="form-label"></label>
-                <textarea asp-for="MultiLinks" class="form-control" rows="4" placeholder="Wpisz po jednym linku w linii"></textarea>
-                <span asp-validation-for="MultiLinks" class="text-danger"></span>
-            </div>
-
-            <div class="content-panel" data-content-panel="plain">
-                <label asp-for="Text" class="form-label"></label>
-                <textarea asp-for="Text" class="form-control form-control-lg" rows="3" placeholder="Dowolny tekst"></textarea>
-                <span asp-validation-for="Text" class="text-danger"></span>
-            </div>
-
-            <button class="btn btn-primary btn-lg generate-button" type="submit">Generuj</button>
-
-            <div class="qr-options">
-                <label asp-for="ErrorCorrectionLevel" class="form-label"></label>
-                <select asp-for="ErrorCorrectionLevel" class="form-select" aria-describedby="errorCorrectionHelp">
-                    @foreach (var option in Model.ErrorCorrectionOptions)
-                    {
-                        <option value="@option.Value">@option.Label</option>
-                    }
-                </select>
-                <div id="errorCorrectionHelp" class="form-text">Wyższy poziom zwieksza odpornosc kodu, ale moze powiekszyc QR.</div>
-                <span asp-validation-for="ErrorCorrectionLevel" class="text-danger"></span>
-            </div>
-
-            <div class="scanner-test">
-                <h2>QR Validation / Scanner Testing</h2>
-                <div class="scanner-grid">
-                    <div>
-                        <label asp-for="CameraProfile" class="form-label"></label>
-                        <select asp-for="CameraProfile" class="form-select">
-                            @foreach (var option in Model.CameraProfileOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="CameraProfile" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="ScanDistanceCm" class="form-label"></label>
-                        <input asp-for="ScanDistanceCm" class="form-control" type="number" min="10" max="200" step="5" />
-                        <span asp-validation-for="ScanDistanceCm" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="BlurLevel" class="form-label"></label>
-                        <input asp-for="BlurLevel" class="form-range" type="range" min="0" max="10" />
-                        <span asp-validation-for="BlurLevel" class="text-danger"></span>
-                    </div>
-                    <div class="low-light-check">
-                        <div class="form-check form-switch">
-                            <input asp-for="LowLight" class="form-check-input" type="checkbox" />
-                            <label asp-for="LowLight" class="form-check-label"></label>
-                        </div>
-                    </div>
+                <div class="field-block content-panel" data-content-panel="multilink">
+                    <label asp-for="MultiLinks" class="field-label">@UiText.Get(language, "MultiLinks")</label>
+                    <textarea asp-for="MultiLinks" class="neo-input" rows="5" placeholder="@UiText.Get(language, "MultiLinksPlaceholder")"></textarea>
+                    <span asp-validation-for="MultiLinks" class="field-error"></span>
                 </div>
-            </div>
 
-            <div class="design-workflow">
-                <div class="section-title-row">
-                    <h2>Design / Branding</h2>
-                    <div class="form-check form-switch">
-                        <input asp-for="DesignEnabled" class="form-check-input" type="checkbox" />
-                        <label asp-for="DesignEnabled" class="form-check-label"></label>
-                    </div>
+                <div class="field-block content-panel" data-content-panel="plain">
+                    <label asp-for="Text" class="field-label">@UiText.Get(language, "Text")</label>
+                    <textarea asp-for="Text" class="neo-input" rows="4" placeholder="@UiText.Get(language, "TextPlaceholder")"></textarea>
+                    <span asp-validation-for="Text" class="field-error"></span>
                 </div>
-                <div class="validation-warning">
-                    Po uzyciu brandingu uruchom QR Validation. Kolory, logo, gradienty, zaokraglenia i dark mode moga sprawic, ze niektore urzadzenia beda mialy problem ze skanowaniem.
-                </div>
-                <div class="design-grid">
-                    <div>
-                        <label asp-for="DesignTemplate" class="form-label"></label>
-                        <select asp-for="DesignTemplate" class="form-select">
-                            @foreach (var option in Model.DesignTemplateOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="DesignTemplate" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="FrameStyle" class="form-label"></label>
-                        <select asp-for="FrameStyle" class="form-select">
-                            @foreach (var option in Model.FrameStyleOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="FrameStyle" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="ForegroundColor" class="form-label"></label>
-                        <input asp-for="ForegroundColor" class="form-control form-control-color" type="color" />
-                        <span asp-validation-for="ForegroundColor" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="BackgroundColor" class="form-label"></label>
-                        <input asp-for="BackgroundColor" class="form-control form-control-color" type="color" />
-                        <span asp-validation-for="BackgroundColor" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="QrDesignGradient" class="form-label"></label>
-                        <select asp-for="QrDesignGradient" class="form-select">
-                            @foreach (var option in Model.QrDesignGradientOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="QrDesignGradient" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="EyeStyle" class="form-label"></label>
-                        <select asp-for="EyeStyle" class="form-select">
-                            @foreach (var option in Model.EyeStyleOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="EyeStyle" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="BrandingLogo" class="form-label"></label>
-                        <input asp-for="BrandingLogo" class="form-control" type="file" accept="image/*" />
-                        <span asp-validation-for="BrandingLogo" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="CtaText" class="form-label"></label>
-                        <input asp-for="CtaText" class="form-control" placeholder="Scan me" />
-                        <span asp-validation-for="CtaText" class="text-danger"></span>
-                    </div>
-                    <div class="low-light-check">
-                        <div class="form-check form-switch">
-                            <input asp-for="RoundedModules" class="form-check-input" type="checkbox" />
-                            <label asp-for="RoundedModules" class="form-check-label"></label>
-                        </div>
-                    </div>
-                    <div class="low-light-check">
-                        <div class="form-check form-switch">
-                            <input asp-for="DarkMode" class="form-check-input" type="checkbox" />
-                            <label asp-for="DarkMode" class="form-check-label"></label>
-                        </div>
-                    </div>
-                </div>
-            </div>
 
-            <div class="print-workflow">
-                <h2>Print / Physical Workflow</h2>
-                <div class="print-grid">
-                    <div>
-                        <label asp-for="PrintFormat" class="form-label"></label>
-                        <select asp-for="PrintFormat" class="form-select">
-                            @foreach (var option in Model.PrintFormatOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="PrintFormat" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintGradient" class="form-label"></label>
-                        <select asp-for="PrintGradient" class="form-select">
-                            @foreach (var option in Model.PrintGradientOptions)
-                            {
-                                <option value="@option.Value">@option.Label</option>
-                            }
-                        </select>
-                        <span asp-validation-for="PrintGradient" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintTitle" class="form-label"></label>
-                        <input asp-for="PrintTitle" class="form-control" placeholder="np. Menu, Wi-Fi, Link do wydarzenia" />
-                        <span asp-validation-for="PrintTitle" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintLabel" class="form-label"></label>
-                        <input asp-for="PrintLabel" class="form-control" placeholder="np. RECEPCJA" />
-                        <span asp-validation-for="PrintLabel" class="text-danger"></span>
-                    </div>
-                    <div class="print-span">
-                        <label asp-for="PrintDescription" class="form-label"></label>
-                        <textarea asp-for="PrintDescription" class="form-control" rows="2" placeholder="Krotki opis widoczny na wydruku"></textarea>
-                        <span asp-validation-for="PrintDescription" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintImage" class="form-label"></label>
-                        <input asp-for="PrintImage" class="form-control" type="file" accept="image/*" />
-                        <span asp-validation-for="PrintImage" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="QrPrintSizeMm" class="form-label"></label>
-                        <input asp-for="QrPrintSizeMm" class="form-control" type="number" min="20" max="180" step="5" />
-                        <span asp-validation-for="QrPrintSizeMm" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintMarginMm" class="form-label"></label>
-                        <input asp-for="PrintMarginMm" class="form-control" type="number" min="0" max="40" />
-                        <span asp-validation-for="PrintMarginMm" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="PrintBleedMm" class="form-label"></label>
-                        <input asp-for="PrintBleedMm" class="form-control" type="number" min="0" max="8" />
-                        <span asp-validation-for="PrintBleedMm" class="text-danger"></span>
-                    </div>
-                    <div>
-                        <label asp-for="LabelCount" class="form-label"></label>
-                        <input asp-for="LabelCount" class="form-control" type="number" min="1" max="24" />
-                        <span asp-validation-for="LabelCount" class="text-danger"></span>
-                    </div>
-                    <div class="low-light-check">
-                        <div class="form-check form-switch">
-                            <input asp-for="CmykSafeExport" class="form-check-input" type="checkbox" />
-                            <label asp-for="CmykSafeExport" class="form-check-label"></label>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        </form>
-    </div>
-</section>
+                <details class="advanced-panel">
+                    <summary>
+                        <span class="material-symbols-outlined">settings</span>
+                        <span>@UiText.Get(language, "AdvancedSettings")</span>
+                    </summary>
 
-@if (Model.ShowResult)
-{
-    var blur = Model.BlurLevel * 0.35;
-    var brightness = Model.LowLight ? 0.42 : 1;
-    var distanceWidth = Math.Clamp(370 - Model.ScanDistanceCm, 180, 320);
-    var sheetClass = $"sheet-{Model.PrintFormat}";
-    var printImage = Model.PrintImageDataUri;
-    var margin = Model.PrintMarginMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    var bleed = Model.PrintBleedMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    var qrSize = Model.QrPrintSizeMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
-    var labelCopies = Math.Clamp(Model.LabelCount, 1, 24);
-    var designEnabledClass = Model.DesignEnabled ? "design-enabled" : "design-disabled";
-    var darkClass = Model.DarkMode ? "design-dark" : "design-light";
-    var roundedClass = Model.RoundedModules ? "modules-rounded" : string.Empty;
-    var eyeClass = $"eyes-{Model.EyeStyle}";
-    var frameClass = $"frame-{Model.FrameStyle}";
-    var templateClass = $"template-{Model.DesignTemplate}";
-    var designStyle = $"--qr-fg:{Model.ForegroundColor}; --qr-bg:{Model.BackgroundColor};";
-
-    <div class="modal fade" id="qrResultModal" tabindex="-1" aria-labelledby="qrResultModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-xl modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title fs-5" id="qrResultModalLabel">Wygenerowany kod QR</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zamknij"></button>
-                </div>
-                <div class="modal-body text-center">
-                    <div class="scanner-preview @(Model.LowLight ? "is-low-light" : "")">
-                        <div class="branded-qr @designEnabledClass @darkClass @roundedClass @eyeClass @frameClass @templateClass gradient-qr-@Model.QrDesignGradient" style="width: @(distanceWidth)px; @designStyle filter: blur(@(blur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))px) brightness(@(brightness.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)));">
-                            <img class="qr-preview" src="@Model.PngDataUri" alt="Wygenerowany kod QR" />
-                            @if (Model.DesignEnabled)
-                            {
-                                <span class="eye eye-tl"></span>
-                                <span class="eye eye-tr"></span>
-                                <span class="eye eye-bl"></span>
-                                @if (!string.IsNullOrWhiteSpace(Model.BrandingLogoDataUri))
+                    <div class="advanced-grid">
+                        <div>
+                            <label asp-for="ErrorCorrectionLevel" class="field-label">@UiText.Get(language, "ErrorCorrectionLevel")</label>
+                            <select asp-for="ErrorCorrectionLevel" class="neo-input">
+                                @foreach (var option in Model.ErrorCorrectionOptions)
                                 {
-                                    <span class="brand-logo-mark"><img src="@Model.BrandingLogoDataUri" alt="" /></span>
+                                    <option value="@option.Value">@option.Label</option>
                                 }
-                                @if (!string.IsNullOrWhiteSpace(Model.CtaText))
+                            </select>
+                            <small>@UiText.Get(language, "ErrorCorrectionHelp")</small>
+                        </div>
+                        <div>
+                            <label asp-for="DesignTemplate" class="field-label">@UiText.Get(language, "DesignTemplate")</label>
+                            <select asp-for="DesignTemplate" class="neo-input">
+                                @foreach (var option in Model.DesignTemplateOptions)
                                 {
-                                    <span class="qr-cta">@Model.CtaText</span>
+                                    <option value="@option.Value">@option.Label</option>
                                 }
-                            }
+                            </select>
+                        </div>
+                        <label class="toggle-line">
+                            <input asp-for="DesignEnabled" type="checkbox" />
+                            <span>@UiText.Get(language, "DesignEnabled")</span>
+                        </label>
+                        <label class="toggle-line">
+                            <input asp-for="RoundedModules" type="checkbox" />
+                            <span>@UiText.Get(language, "RoundedModules")</span>
+                        </label>
+                        <label class="toggle-line">
+                            <input asp-for="DarkMode" type="checkbox" />
+                            <span>@UiText.Get(language, "DarkMode")</span>
+                        </label>
+                        <label class="toggle-line">
+                            <input asp-for="CmykSafeExport" type="checkbox" />
+                            <span>@UiText.Get(language, "CmykSafeExport")</span>
+                        </label>
+                        <div>
+                            <label asp-for="ForegroundColor" class="field-label">@UiText.Get(language, "ForegroundColor")</label>
+                            <input asp-for="ForegroundColor" class="neo-input color-input" type="color" />
+                        </div>
+                        <div>
+                            <label asp-for="BackgroundColor" class="field-label">@UiText.Get(language, "BackgroundColor")</label>
+                            <input asp-for="BackgroundColor" class="neo-input color-input" type="color" />
+                        </div>
+                        <div>
+                            <label asp-for="QrDesignGradient" class="field-label">@UiText.Get(language, "QrDesignGradient")</label>
+                            <select asp-for="QrDesignGradient" class="neo-input">
+                                @foreach (var option in Model.QrDesignGradientOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label asp-for="EyeStyle" class="field-label">@UiText.Get(language, "EyeStyle")</label>
+                            <select asp-for="EyeStyle" class="neo-input">
+                                @foreach (var option in Model.EyeStyleOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label asp-for="FrameStyle" class="field-label">@UiText.Get(language, "FrameStyle")</label>
+                            <select asp-for="FrameStyle" class="neo-input">
+                                @foreach (var option in Model.FrameStyleOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
+                        </div>
+                        <div>
+                            <label asp-for="CtaText" class="field-label">@UiText.Get(language, "CtaText")</label>
+                            <input asp-for="CtaText" class="neo-input" />
+                        </div>
+                        <div>
+                            <label asp-for="BrandingLogo" class="field-label">@UiText.Get(language, "BrandingLogo")</label>
+                            <input asp-for="BrandingLogo" class="neo-input file-input" type="file" accept="image/*" />
                         </div>
                     </div>
+                </details>
 
-                    @if (Model.ValidationResult is not null)
-                    {
-                        <div class="score-panel">
-                            <div class="score-header">
-                                <strong>@Model.ValidationResult.Verdict</strong>
-                                <span>@Model.ValidationResult.ModuleCount x @Model.ValidationResult.ModuleCount modules</span>
-                            </div>
-                            <div class="score-row">
-                                <div class="score-label">
-                                    <span>Readability score</span>
-                                    <strong>@Model.ValidationResult.ReadabilityScore/100</strong>
-                                </div>
-                                <div class="progress" aria-label="Readability score">
-                                    <div class="progress-bar @(Model.ValidationResult.ReadabilityScore >= 70 ? "bg-success" : "bg-warning")" style="width: @Model.ValidationResult.ReadabilityScore%"></div>
-                                </div>
-                            </div>
-                            <div class="score-row">
-                                <div class="score-label">
-                                    <span>Print safety score</span>
-                                    <strong>@Model.ValidationResult.PrintSafetyScore/100</strong>
-                                </div>
-                                <div class="progress" aria-label="Print safety score">
-                                    <div class="progress-bar @(Model.ValidationResult.PrintSafetyScore >= 70 ? "bg-success" : "bg-warning")" style="width: @Model.ValidationResult.PrintSafetyScore%"></div>
-                                </div>
-                            </div>
-                            <p class="score-note">@Model.ValidationResult.Recommendation</p>
-                        </div>
-                    }
-
-                    @if (Model.BrandingWorkflowResult is not null)
-                    {
-                        <div class="branding-score-panel @(Model.BrandingWorkflowResult.ShouldRunValidation ? "is-warning" : "")">
-                            <strong>Design / Branding risk: @Model.BrandingWorkflowResult.RiskScore/100</strong>
-                            <p>@Model.BrandingWorkflowResult.Warning</p>
-                            <p>@Model.BrandingWorkflowResult.Recommendation</p>
-                        </div>
-                    }
-
-                    <div class="print-preview-panel">
-                        <div class="print-toolbar">
-                            <div>
-                                <strong>Print / Physical Workflow</strong>
-                                @if (Model.PrintWorkflowResult is not null)
+                <details class="advanced-panel">
+                    <summary>
+                        <span class="material-symbols-outlined">print</span>
+                        <span>@UiText.Get(language, "PrintWorkflow")</span>
+                    </summary>
+                    <div class="advanced-grid">
+                        <div>
+                            <label asp-for="PrintFormat" class="field-label">@UiText.Get(language, "PrintFormat")</label>
+                            <select asp-for="PrintFormat" class="neo-input">
+                                @foreach (var option in Model.PrintFormatOptions)
                                 {
-                                    <span>@Model.PrintWorkflowResult.FormatLabel, @Model.PrintWorkflowResult.EffectiveDpi DPI</span>
+                                    <option value="@option.Value">@option.Label</option>
                                 }
-                            </div>
-                            <button class="btn btn-primary" type="button" onclick="window.print()">Drukuj / zapisz PDF</button>
+                            </select>
                         </div>
-                        <div id="printArea" class="print-area">
-                            <article class="print-sheet @sheetClass gradient-@Model.PrintGradient @templateClass" style="--print-margin: @(margin)mm; --print-bleed: @(bleed)mm; --qr-size: @(qrSize)mm;">
-                                <div class="bleed-guide"></div>
-                                <div class="print-content">
-                                    @if (!string.IsNullOrWhiteSpace(Model.PrintLabel))
-                                    {
-                                        <span class="print-label">@Model.PrintLabel</span>
-                                    }
-                                    @if (!string.IsNullOrWhiteSpace(printImage))
-                                    {
-                                        <img class="print-image" src="@printImage" alt="" />
-                                    }
-                                    <h2>@(string.IsNullOrWhiteSpace(Model.PrintTitle) ? "Skanuj kod QR" : Model.PrintTitle)</h2>
-                                    @if (!string.IsNullOrWhiteSpace(Model.PrintDescription))
-                                    {
-                                        <p>@Model.PrintDescription</p>
-                                    }
-                                    <div class="branded-qr print-qr @designEnabledClass @darkClass @roundedClass @eyeClass @frameClass @templateClass gradient-qr-@Model.QrDesignGradient" style="@designStyle">
-                                        <img src="@Model.PngDataUri" alt="Kod QR do druku" />
-                                        @if (Model.DesignEnabled)
-                                        {
-                                            <span class="eye eye-tl"></span>
-                                            <span class="eye eye-tr"></span>
-                                            <span class="eye eye-bl"></span>
-                                            @if (!string.IsNullOrWhiteSpace(Model.BrandingLogoDataUri))
-                                            {
-                                                <span class="brand-logo-mark"><img src="@Model.BrandingLogoDataUri" alt="" /></span>
-                                            }
-                                            @if (!string.IsNullOrWhiteSpace(Model.CtaText))
-                                            {
-                                                <span class="qr-cta">@Model.CtaText</span>
-                                            }
-                                        }
-                                    </div>
-                                    @if (labelCopies > 1)
-                                    {
-                                        <div class="label-strip" aria-label="Etykiety">
-                                            @for (var i = 1; i <= labelCopies; i++)
-                                            {
-                                                <span>@(string.IsNullOrWhiteSpace(Model.PrintLabel) ? $"Label {i}" : Model.PrintLabel)</span>
-                                            }
-                                        </div>
-                                    }
-                                </div>
-                            </article>
+                        <div>
+                            <label asp-for="PrintGradient" class="field-label">@UiText.Get(language, "PrintGradient")</label>
+                            <select asp-for="PrintGradient" class="neo-input">
+                                @foreach (var option in Model.PrintGradientOptions)
+                                {
+                                    <option value="@option.Value">@option.Label</option>
+                                }
+                            </select>
                         </div>
-                        @if (Model.PrintWorkflowResult is not null)
+                        <div>
+                            <label asp-for="PrintTitle" class="field-label">@UiText.Get(language, "PrintTitle")</label>
+                            <input asp-for="PrintTitle" class="neo-input" />
+                        </div>
+                        <div>
+                            <label asp-for="PrintLabel" class="field-label">@UiText.Get(language, "PrintLabel")</label>
+                            <input asp-for="PrintLabel" class="neo-input" />
+                        </div>
+                        <div class="span-all">
+                            <label asp-for="PrintDescription" class="field-label">@UiText.Get(language, "PrintDescription")</label>
+                            <textarea asp-for="PrintDescription" class="neo-input" rows="3"></textarea>
+                        </div>
+                        <div>
+                            <label asp-for="PrintImage" class="field-label">@UiText.Get(language, "PrintImage")</label>
+                            <input asp-for="PrintImage" class="neo-input file-input" type="file" accept="image/*" />
+                        </div>
+                        <div>
+                            <label asp-for="QrPrintSizeMm" class="field-label">@UiText.Get(language, "QrPrintSizeMm")</label>
+                            <input asp-for="QrPrintSizeMm" class="neo-input" type="number" min="20" max="180" />
+                        </div>
+                        <div>
+                            <label asp-for="PrintMarginMm" class="field-label">@UiText.Get(language, "PrintMarginMm")</label>
+                            <input asp-for="PrintMarginMm" class="neo-input" type="number" min="0" max="40" />
+                        </div>
+                        <div>
+                            <label asp-for="PrintBleedMm" class="field-label">@UiText.Get(language, "PrintBleedMm")</label>
+                            <input asp-for="PrintBleedMm" class="neo-input" type="number" min="0" max="8" />
+                        </div>
+                        <div>
+                            <label asp-for="LabelCount" class="field-label">@UiText.Get(language, "LabelCount")</label>
+                            <input asp-for="LabelCount" class="neo-input" type="number" min="1" max="24" />
+                        </div>
+                    </div>
+                </details>
+
+                <button class="generate-button" type="submit">
+                    <span>@UiText.Get(language, "Generate")</span>
+                    <span class="material-symbols-outlined">qr_code_2</span>
+                </button>
+            </form>
+
+            <aside class="preview-panel">
+                <div class="qr-orbit">
+                    <div class="qr-glow"></div>
+                    <div class="qr-card">
+                        @if (hasResult)
                         {
-                            <div class="print-checks">
-                                <span class="@(Model.PrintWorkflowResult.IsDpiSafe ? "check-ok" : "check-warn")">DPI: @Model.PrintWorkflowResult.EffectiveDpi</span>
-                                <span class="@(Model.PrintWorkflowResult.IsBleedSafe ? "check-ok" : "check-warn")">Bleed: @Model.PrintBleedMm mm</span>
-                                <span class="@(Model.PrintWorkflowResult.IsCmykSafe ? "check-ok" : "check-warn")">CMYK-safe: @(Model.PrintWorkflowResult.IsCmykSafe ? "tak" : "uwaga")</span>
-                                <span>Margines: @Model.PrintMarginMm mm</span>
+                            <img src="@Model.PngDataUri" alt="@UiText.Get(language, "GeneratedQr")" />
+                        }
+                        else
+                        {
+                            <div class="qr-placeholder" aria-hidden="true">
+                                @for (var i = 0; i < 81; i++)
+                                {
+                                    <span class="@(i % 3 == 0 || i % 7 == 0 ? "dark" : "")"></span>
+                                }
                             </div>
-                            <p class="score-note">@Model.PrintWorkflowResult.Recommendation</p>
                         }
                     </div>
+                </div>
 
-                    <div class="download-actions">
+                <div class="preview-status">
+                    <span class="status-dot @(hasResult ? "active" : "")"></span>
+                    <div>
+                        <strong>@(hasResult ? UiText.Get(language, "GeneratedQr") : UiText.Get(language, "AwaitingQr"))</strong>
+                        <p>@(hasResult ? generatedPayload : UiText.Get(language, "PreviewHint"))</p>
+                    </div>
+                </div>
+
+                @if (hasResult)
+                {
+                    <div class="download-row">
                         @foreach (var format in Model.Formats)
                         {
                             <form asp-action="Download" method="post">
                                 @Html.AntiForgeryToken()
-                                <input type="hidden" name="text" value="@Model.GeneratedPayload" />
+                                <input type="hidden" name="text" value="@generatedPayload" />
                                 <input type="hidden" name="format" value="@format.Value" />
                                 <input type="hidden" name="errorCorrectionLevel" value="@Model.ErrorCorrectionLevel" />
-                                <button class="btn btn-outline-primary" type="submit">Zapisz @format.Label</button>
+                                <button class="download-button" type="submit">
+                                    <span class="material-symbols-outlined">download</span>
+                                    <span>@format.Label</span>
+                                </button>
                             </form>
                         }
+                    </div>
+                    <button class="secondary-button" type="button" data-bs-toggle="modal" data-bs-target="#qrResultModal">
+                        <span class="material-symbols-outlined">tune</span>
+                        <span>@UiText.Get(language, "OpenPrintPanel")</span>
+                    </button>
+                }
+            </aside>
+        </div>
+    </section>
+</section>
+
+@if (hasResult)
+{
+    var sheetClass = Model.PrintFormat switch
+    {
+        "a5" => "sheet-a5",
+        "letter" => "sheet-letter",
+        "dl" => "sheet-dl",
+        "square" => "sheet-square",
+        _ => "sheet-a4"
+    };
+    var labelCopies = Math.Clamp(Model.LabelCount, 1, 24);
+    var printImage = Model.PrintImageDataUri;
+
+    <div class="modal fade result-modal" id="qrResultModal" tabindex="-1" aria-labelledby="qrResultModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title" id="qrResultModalLabel">@UiText.Get(language, "ResultReady")</h2>
+                        <p>@UiText.Get(language, "ResultReadyCopy")</p>
+                    </div>
+                    <button type="button" class="modal-close" data-bs-dismiss="modal" aria-label="@UiText.Get(language, "Close")">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="result-grid">
+                        <div class="result-left">
+                            <div class="qr-card modal-qr">
+                                <img src="@Model.PngDataUri" alt="@UiText.Get(language, "GeneratedQr")" />
+                            </div>
+
+                            <div class="download-row">
+                                @foreach (var format in Model.Formats)
+                                {
+                                    <form asp-action="Download" method="post">
+                                        @Html.AntiForgeryToken()
+                                        <input type="hidden" name="text" value="@generatedPayload" />
+                                        <input type="hidden" name="format" value="@format.Value" />
+                                        <input type="hidden" name="errorCorrectionLevel" value="@Model.ErrorCorrectionLevel" />
+                                        <button class="download-button" type="submit">
+                                            <span class="material-symbols-outlined">download</span>
+                                            <span>@format.Label</span>
+                                        </button>
+                                    </form>
+                                }
+                            </div>
+
+                            <form asp-action="Validate" method="post" class="glass-mini validation-card">
+                                @Html.AntiForgeryToken()
+                                <input type="hidden" name="generatedPayload" value="@generatedPayload" />
+                                <input type="hidden" asp-for="ContentType" />
+                                <input type="hidden" asp-for="ErrorCorrectionLevel" />
+                                <input type="hidden" asp-for="PrintFormat" />
+                                <input type="hidden" asp-for="PrintGradient" />
+                                <input type="hidden" asp-for="PrintTitle" />
+                                <input type="hidden" asp-for="PrintLabel" />
+                                <input type="hidden" asp-for="PrintDescription" />
+                                <input type="hidden" asp-for="PrintImageDataUri" />
+                                <input type="hidden" asp-for="QrPrintSizeMm" />
+                                <input type="hidden" asp-for="PrintMarginMm" />
+                                <input type="hidden" asp-for="PrintBleedMm" />
+                                <input type="hidden" asp-for="LabelCount" />
+                                <input type="hidden" asp-for="CmykSafeExport" />
+                                <input type="hidden" asp-for="DesignEnabled" />
+                                <input type="hidden" asp-for="ForegroundColor" />
+                                <input type="hidden" asp-for="BackgroundColor" />
+                                <input type="hidden" asp-for="QrDesignGradient" />
+                                <input type="hidden" asp-for="RoundedModules" />
+                                <input type="hidden" asp-for="EyeStyle" />
+                                <input type="hidden" asp-for="BrandingLogoDataUri" />
+                                <input type="hidden" asp-for="FrameStyle" />
+                                <input type="hidden" asp-for="CtaText" />
+                                <input type="hidden" asp-for="DarkMode" />
+                                <input type="hidden" asp-for="DesignTemplate" />
+                                <input type="hidden" asp-for="SocialPlatform" />
+                                <h3>@UiText.Get(language, "QrValidation")</h3>
+                                <div class="form-grid">
+                                    <div>
+                                        <label asp-for="CameraProfile" class="field-label">@UiText.Get(language, "CameraProfile")</label>
+                                        <select asp-for="CameraProfile" class="neo-input">
+                                            @foreach (var option in Model.CameraProfileOptions)
+                                            {
+                                                <option value="@option.Value">@option.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label asp-for="ScanDistanceCm" class="field-label">@UiText.Get(language, "ScanDistanceCm")</label>
+                                        <input asp-for="ScanDistanceCm" class="neo-input" type="number" min="10" max="200" step="5" />
+                                    </div>
+                                    <div>
+                                        <label asp-for="BlurLevel" class="field-label">@UiText.Get(language, "BlurLevel")</label>
+                                        <input asp-for="BlurLevel" class="range-input" type="range" min="0" max="10" />
+                                    </div>
+                                    <label class="toggle-line">
+                                        <input asp-for="LowLight" type="checkbox" />
+                                        <span>@UiText.Get(language, "LowLight")</span>
+                                    </label>
+                                </div>
+                                <button class="secondary-button full" type="submit">@UiText.Get(language, "RunValidation")</button>
+                            </form>
+
+                            <div class="score-card glass-mini @(isValidated ? "is-validated" : "")">
+                                @if (Model.ValidationResult is not null)
+                                {
+                                    <div class="score-heading">
+                                        <strong>@Model.ValidationResult.Verdict</strong>
+                                        <span>@Model.ValidationResult.ModuleCount x @Model.ValidationResult.ModuleCount</span>
+                                    </div>
+                                }
+                                <div class="score-row">
+                                    <span>@UiText.Get(language, "ReadabilityScore")</span>
+                                    <div class="stars" aria-label="@UiText.Get(language, "ReadabilityScore")">
+                                        @for (var i = 1; i <= 5; i++)
+                                        {
+                                            <span class="@(i <= readabilityStars ? "filled" : "")">star</span>
+                                        }
+                                    </div>
+                                </div>
+                                <div class="score-row">
+                                    <span>@UiText.Get(language, "PrintSafetyScore")</span>
+                                    <div class="stars" aria-label="@UiText.Get(language, "PrintSafetyScore")">
+                                        @for (var i = 1; i <= 5; i++)
+                                        {
+                                            <span class="@(i <= printSafetyStars ? "filled" : "")">star</span>
+                                        }
+                                    </div>
+                                </div>
+                                @if (Model.ValidationResult is not null)
+                                {
+                                    <p>@Model.ValidationResult.Recommendation</p>
+                                }
+                            </div>
+                        </div>
+
+                        <div class="result-right">
+                            <div class="result-toolbar">
+                                <div>
+                                    <h3>@UiText.Get(language, "PrintWorkflow")</h3>
+                                    @if (Model.PrintWorkflowResult is not null)
+                                    {
+                                        <p>@Model.PrintWorkflowResult.FormatLabel, @Model.PrintWorkflowResult.EffectiveDpi DPI</p>
+                                    }
+                                </div>
+                                <button class="generate-button compact" type="button" onclick="window.print()">
+                                    <span class="material-symbols-outlined">print</span>
+                                    <span>@UiText.Get(language, "PrintSavePdf")</span>
+                                </button>
+                            </div>
+
+                            <div id="printArea" class="print-area">
+                                <article class="print-sheet @sheetClass gradient-@Model.PrintGradient" style="--print-margin: @(Model.PrintMarginMm)mm; --print-bleed: @(Model.PrintBleedMm)mm; --qr-size: @(Model.QrPrintSizeMm)mm;">
+                                    <div class="bleed-guide"></div>
+                                    <div class="print-content">
+                                        @if (!string.IsNullOrWhiteSpace(Model.PrintLabel))
+                                        {
+                                            <span class="print-label">@Model.PrintLabel</span>
+                                        }
+                                        @if (!string.IsNullOrWhiteSpace(printImage))
+                                        {
+                                            <img class="print-image" src="@printImage" alt="" />
+                                        }
+                                        <h2>@(string.IsNullOrWhiteSpace(Model.PrintTitle) ? UiText.Get(language, "ScanQr") : Model.PrintTitle)</h2>
+                                        @if (!string.IsNullOrWhiteSpace(Model.PrintDescription))
+                                        {
+                                            <p>@Model.PrintDescription</p>
+                                        }
+                                        <div class="print-qr">
+                                            <img src="@Model.PngDataUri" alt="@UiText.Get(language, "GeneratedQr")" />
+                                        </div>
+                                        @if (labelCopies > 1)
+                                        {
+                                            <div class="label-strip" aria-label="@UiText.Get(language, "LabelCount")">
+                                                @for (var i = 1; i <= labelCopies; i++)
+                                                {
+                                                    <span>@(string.IsNullOrWhiteSpace(Model.PrintLabel) ? $"Label {i}" : Model.PrintLabel)</span>
+                                                }
+                                            </div>
+                                        }
+                                    </div>
+                                </article>
+                            </div>
+
+                            @if (Model.PrintWorkflowResult is not null)
+                            {
+                                <div class="print-checks">
+                                    <span class="@(Model.PrintWorkflowResult.IsDpiSafe ? "ok" : "warn")">DPI: @Model.PrintWorkflowResult.EffectiveDpi</span>
+                                    <span class="@(Model.PrintWorkflowResult.IsBleedSafe ? "ok" : "warn")">Bleed: @Model.PrintBleedMm mm</span>
+                                    <span class="@(Model.PrintWorkflowResult.IsCmykSafe ? "ok" : "warn")">CMYK: @(Model.PrintWorkflowResult.IsCmykSafe ? "OK" : "!")</span>
+                                    <span>@UiText.Get(language, "PrintMarginMm"): @Model.PrintMarginMm mm</span>
+                                </div>
+                                <p class="print-note">@Model.PrintWorkflowResult.Recommendation</p>
+                            }
+                        </div>
                     </div>
                 </div>
             </div>
@@ -609,30 +664,16 @@
 
 @section Scripts {
     <partial name="_ValidationScriptsPartial" />
-    @if (Model.ShowResult)
+    @if (hasResult)
     {
         <script>
-            const qrModal = new bootstrap.Modal(document.getElementById('qrResultModal'));
-            qrModal.show();
+            window.qrResultShouldOpen = true;
+            if (window.bootstrap) {
+                const qrResultModal = document.getElementById('qrResultModal');
+                if (qrResultModal) {
+                    new bootstrap.Modal(qrResultModal).show();
+                }
+            }
         </script>
     }
-    <script>
-        const contentTypeInputs = document.querySelectorAll('input[name="ContentType"]');
-        const contentPanels = document.querySelectorAll('[data-content-panel]');
-
-        function setActiveContentPanel() {
-            const activeValue = document.querySelector('input[name="ContentType"]:checked')?.value || 'general';
-
-            contentPanels.forEach(panel => {
-                const isActive = panel.dataset.contentPanel === activeValue;
-                panel.hidden = !isActive;
-                panel.querySelectorAll('input, select, textarea').forEach(field => {
-                    field.disabled = !isActive;
-                });
-            });
-        }
-
-        contentTypeInputs.forEach(input => input.addEventListener('change', setActiveContentPanel));
-        setActiveContentPanel();
-    </script>
 }

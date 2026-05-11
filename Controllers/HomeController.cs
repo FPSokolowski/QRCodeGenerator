@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Text.Json;
 using Microsoft.AspNetCore.Mvc;
 using QRCodeGenerator.Models;
+using QRCodeGenerator.Services;
 using QRCoder;
 using QrGenerator = QRCoder.QRCodeGenerator;
 
@@ -8,15 +10,26 @@ namespace QRCodeGenerator.Controllers;
 
 public class HomeController : Controller
 {
+    private const string PreferencesCookieName = "qr_generator_preferences";
+
     public IActionResult Index()
     {
-        return View(new QrCodeViewModel());
+        var preferences = ReadPreferences();
+        var model = ApplyPreferenceDefaults(new QrCodeViewModel(), preferences);
+        SetPreferenceViewData(preferences);
+
+        return View(model);
     }
 
     [HttpPost]
     [ValidateAntiForgeryToken]
     public async Task<IActionResult> Index(QrCodeViewModel model)
     {
+        var preferences = ReadPreferences();
+        model.Language = preferences.Language;
+        model.ThemePreference = preferences.Theme;
+        SetPreferenceViewData(preferences);
+
         await LoadPrintImageAsync(model);
         await LoadBrandingLogoAsync(model);
         var payload = BuildQrPayload(model);
@@ -30,10 +43,63 @@ public class HomeController : Controller
         model.GeneratedPayload = payload;
         model.PngDataUri = $"data:image/png;base64,{Convert.ToBase64String(CreatePng(payload, errorCorrectionLevel))}";
         model.BrandingWorkflowResult = ValidateBrandingWorkflow(model);
-        model.ValidationResult = ValidateQr(payload, errorCorrectionLevel, model);
-        model.PrintWorkflowResult = ValidatePrintWorkflow(model, model.ValidationResult.ModuleCount);
+        model.PrintWorkflowResult = ValidatePrintWorkflow(model, GetModuleCount(payload, errorCorrectionLevel));
+        SavePreferences(UpdateRecentPreferences(preferences, model));
 
         return View(model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult Validate(QrCodeViewModel model, string generatedPayload)
+    {
+        var preferences = ReadPreferences();
+        model.Language = preferences.Language;
+        model.ThemePreference = preferences.Theme;
+        SetPreferenceViewData(preferences);
+
+        if (string.IsNullOrWhiteSpace(generatedPayload))
+        {
+            ModelState.AddModelError(nameof(model.GeneratedPayload), "Brak kodu QR do walidacji.");
+            return View(nameof(Index), model);
+        }
+
+        var errorCorrectionLevel = ParseErrorCorrectionLevel(model.ErrorCorrectionLevel);
+        model.GeneratedPayload = generatedPayload;
+        model.PngDataUri = $"data:image/png;base64,{Convert.ToBase64String(CreatePng(generatedPayload, errorCorrectionLevel))}";
+
+        if (model.ContentType == "social")
+        {
+            model.SocialLogoDataUri = GetSocialLogoDataUri(NormalizeSocialPlatform(model.SocialPlatform));
+            model.BrandingLogoDataUri ??= model.SocialLogoDataUri;
+        }
+
+        model.BrandingWorkflowResult = ValidateBrandingWorkflow(model);
+        model.ValidationResult = ValidateQr(generatedPayload, errorCorrectionLevel, model);
+        model.PrintWorkflowResult = ValidatePrintWorkflow(model, model.ValidationResult.ModuleCount);
+
+        return View(nameof(Index), model);
+    }
+
+    [HttpPost]
+    [ValidateAntiForgeryToken]
+    public IActionResult SetPreferences(string language, string theme, string? returnUrl = null)
+    {
+        var preferences = ReadPreferences();
+        preferences.Language = UiText.NormalizeLanguage(language);
+        preferences.Theme = theme == "dark" ? "dark" : "light";
+        SavePreferences(preferences);
+
+        return LocalRedirect(string.IsNullOrWhiteSpace(returnUrl) ? Url.Action(nameof(Index))! : returnUrl);
+    }
+
+    [Route("dynamic")]
+    public IActionResult Dynamic()
+    {
+        var preferences = ReadPreferences();
+        SetPreferenceViewData(preferences);
+
+        return View();
     }
 
     [HttpPost]
@@ -73,7 +139,7 @@ public class HomeController : Controller
             "crypto" => BuildCryptoPayload(model),
             "app" => Require(model.AppStoreUrl, nameof(model.AppStoreUrl), "Wpisz link do aplikacji."),
             "pdf" => Require(model.PdfUrl, nameof(model.PdfUrl), "Wpisz link do dokumentu PDF."),
-            "social" => Require(model.SocialUrl, nameof(model.SocialUrl), "Wpisz link do profilu social media."),
+            "social" => BuildSocialPayload(model),
             "multilink" => BuildMultiLinkPayload(model),
             "plain" => Require(model.Text, nameof(model.Text), "Wpisz tekst."),
             _ => Require(model.Text, nameof(model.Text), "Wpisz tekst do zakodowania.")
@@ -110,6 +176,7 @@ public class HomeController : Controller
             "VERSION:3.0",
             $"FN:{EscapeVCard(name)}",
             OptionalLine("ORG", model.VCardCompany),
+            OptionalLine("TITLE", model.VCardJobTitle),
             OptionalLine("TEL", model.VCardPhone),
             OptionalLine("EMAIL", model.VCardEmail),
             "END:VCARD"
@@ -194,6 +261,84 @@ public class HomeController : Controller
             .Take(10));
     }
 
+    private string BuildSocialPayload(QrCodeViewModel model)
+    {
+        var url = Require(model.SocialUrl, nameof(model.SocialUrl), "Wpisz link do profilu social media.");
+        var platform = NormalizeSocialPlatform(model.SocialPlatform);
+
+        if (!IsValidSocialUrl(url, platform))
+        {
+            ModelState.AddModelError(nameof(model.SocialUrl), "Link nie pasuje do wybranego serwisu social media.");
+        }
+
+        model.DesignEnabled = true;
+        model.SocialLogoDataUri = GetSocialLogoDataUri(platform);
+        model.BrandingLogoDataUri ??= model.SocialLogoDataUri;
+
+        return url;
+    }
+
+    private static string NormalizeSocialPlatform(string? platform)
+    {
+        return platform?.ToLowerInvariant() switch
+        {
+            "facebook" => "facebook",
+            "linkedin" => "linkedin",
+            "x" => "x",
+            "youtube" => "youtube",
+            "tiktok" => "tiktok",
+            _ => "instagram"
+        };
+    }
+
+    private static bool IsValidSocialUrl(string url, string platform)
+    {
+        if (!Uri.TryCreate(url, UriKind.Absolute, out var uri))
+        {
+            return false;
+        }
+
+        var host = uri.Host.ToLowerInvariant();
+
+        return platform switch
+        {
+            "instagram" => IsHost(host, "instagram.com"),
+            "facebook" => IsHost(host, "facebook.com") || IsHost(host, "fb.com"),
+            "linkedin" => IsHost(host, "linkedin.com"),
+            "x" => IsHost(host, "x.com") || IsHost(host, "twitter.com"),
+            "youtube" => IsHost(host, "youtube.com") || IsHost(host, "youtu.be"),
+            "tiktok" => IsHost(host, "tiktok.com"),
+            _ => false
+        };
+    }
+
+    private static bool IsHost(string host, string expectedDomain)
+    {
+        return host == expectedDomain || host.EndsWith($".{expectedDomain}", StringComparison.Ordinal);
+    }
+
+    private static string GetSocialLogoDataUri(string platform)
+    {
+        var (label, fill) = platform switch
+        {
+            "facebook" => ("f", "#1877F2"),
+            "linkedin" => ("in", "#0A66C2"),
+            "x" => ("X", "#111111"),
+            "youtube" => ("▶", "#FF0000"),
+            "tiktok" => ("♪", "#111111"),
+            _ => ("◎", "#E4405F")
+        };
+        var fontSize = label.Length > 1 ? 34 : 44;
+        var svg = $"""
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 96 96">
+              <rect width="96" height="96" rx="24" fill="{fill}"/>
+              <text x="48" y="57" text-anchor="middle" font-family="Arial, Helvetica, sans-serif" font-size="{fontSize}" font-weight="800" fill="#fff">{System.Net.WebUtility.HtmlEncode(label)}</text>
+            </svg>
+            """;
+
+        return $"data:image/svg+xml;base64,{Convert.ToBase64String(System.Text.Encoding.UTF8.GetBytes(svg))}";
+    }
+
     private static string OptionalLine(string name, string? value)
     {
         return string.IsNullOrWhiteSpace(value) ? string.Empty : $"{name}:{EscapeVCard(value.Trim())}";
@@ -254,7 +399,9 @@ public class HomeController : Controller
         var readabilityScore = ClampScore(100 - densityPenalty - distancePenalty - cameraPenalty - lowLightPenalty - blurPenalty - brandingPenalty + eccBonus);
         var printSafetyScore = ClampScore(96 - (Math.Max(0, moduleCount - 25) * 1.15) - (text.Length > 250 ? 8 : 0) - (brandingPenalty * 0.55) + eccBonus);
         var isReadable = readabilityScore >= 70 && printSafetyScore >= 60;
-        var verdict = isReadable ? "Czytelny w symulowanych warunkach" : "Ryzykowny do skanowania";
+        var verdict = isReadable
+            ? UiText.Get(model.Language, "Readable")
+            : UiText.Get(model.Language, "Risky");
         var recommendation = BuildRecommendation(model, errorCorrectionLevel, readabilityScore, printSafetyScore, moduleCount);
 
         return new QrValidationResult(readabilityScore, printSafetyScore, isReadable, verdict, moduleCount, recommendation);
@@ -315,14 +462,16 @@ public class HomeController : Controller
         var riskScore = CalculateBrandingRisk(model);
         var shouldRunValidation = model.DesignEnabled && riskScore >= 10;
         var warning = shouldRunValidation
-            ? "Po modyfikacji wygladu niektore urzadzenia moga miec problem ze skanowaniem. Uruchom QR Validation po kazdej zmianie brandingu."
-            : "Branding jest lekki, ale warto sprawdzic QR Validation przed drukiem lub publikacja.";
+            ? UiText.Get(model.Language, "BrandingWarning")
+            : (model.Language == "en"
+                ? "Branding is light, but it is still worth running QR Validation before print or publishing."
+                : "Branding jest lekki, ale warto sprawdzic QR Validation przed drukiem lub publikacja.");
         var recommendation = riskScore switch
         {
-            >= 35 => "Zmniejsz logo, wylacz mocny gradient albo podnies korekte bledu do H.",
-            >= 20 => "Przetestuj kod na slabszej kamerze i w trybie low-light.",
-            >= 10 => "Sprawdz wynik Readability po zmianach wizualnych.",
-            _ => "Stylizacja ma niski wplyw na czytelnosc."
+            >= 35 => model.Language == "en" ? "Reduce the logo, disable the strong gradient, or raise error correction to H." : "Zmniejsz logo, wylacz mocny gradient albo podnies korekte bledu do H.",
+            >= 20 => model.Language == "en" ? "Test the code on a weaker camera and in low-light mode." : "Przetestuj kod na slabszej kamerze i w trybie low-light.",
+            >= 10 => model.Language == "en" ? "Check the Readability score after visual changes." : "Sprawdz wynik Readability po zmianach wizualnych.",
+            _ => model.Language == "en" ? "The styling has low impact on readability." : "Stylizacja ma niski wplyw na czytelnosc."
         };
 
         return new BrandingWorkflowResult(riskScore, shouldRunValidation, warning, recommendation);
@@ -391,25 +540,31 @@ public class HomeController : Controller
     {
         if (!isDpiSafe)
         {
-            return $"Zwieksz DPI lub zmniejsz QR na wydruku. Aktualnie ok. {effectiveDpi} DPI.";
+            return model.Language == "en"
+                ? $"Increase DPI or reduce QR print size. Current value is about {effectiveDpi} DPI."
+                : $"Zwieksz DPI lub zmniejsz QR na wydruku. Aktualnie ok. {effectiveDpi} DPI.";
         }
 
         if (!isBleedSafe)
         {
-            return "Ustaw bleed na minimum 3 mm dla bezpiecznego ciecia.";
+            return model.Language == "en" ? "Set bleed to at least 3 mm for safe trimming." : "Ustaw bleed na minimum 3 mm dla bezpiecznego ciecia.";
         }
 
         if (!isCmykSafe)
         {
-            return "Dla eksportu CMYK-safe wybierz gradient CMYK-safe, Graphite albo Mint i pozostaw wlaczony tryb CMYK-safe.";
+            return model.Language == "en"
+                ? "For CMYK-safe export choose CMYK-safe, Graphite, or Mint and keep CMYK-safe enabled."
+                : "Dla eksportu CMYK-safe wybierz gradient CMYK-safe, Graphite albo Mint i pozostaw wlaczony tryb CMYK-safe.";
         }
 
         if (model.PrintMarginMm < 8)
         {
-            return "Margines jest niski. Dla drukarni bezpieczniej zostawic co najmniej 8 mm.";
+            return model.Language == "en" ? "The margin is low. For print shops, at least 8 mm is safer." : "Margines jest niski. Dla drukarni bezpieczniej zostawic co najmniej 8 mm.";
         }
 
-        return "Uklad jest gotowy do wydruku z bezpiecznym DPI, bleed i paleta CMYK-safe.";
+        return model.Language == "en"
+            ? "The layout is ready for print with safe DPI, bleed, and a CMYK-safe palette."
+            : "Uklad jest gotowy do wydruku z bezpiecznym DPI, bleed i paleta CMYK-safe.";
     }
 
     private static int GetModuleCount(string text, QrGenerator.ECCLevel errorCorrectionLevel)
@@ -429,30 +584,32 @@ public class HomeController : Controller
     {
         if (readabilityScore >= 85 && printSafetyScore >= 80)
         {
-            return "Kod ma dobry zapas czytelnosci.";
+            return model.Language == "en" ? "The code has a strong readability buffer." : "Kod ma dobry zapas czytelnosci.";
         }
 
         if (model.BlurLevel >= 5)
         {
-            return "Zmniejsz rozmycie lub zwieksz fizyczny rozmiar kodu.";
+            return model.Language == "en" ? "Reduce blur or increase the physical QR size." : "Zmniejsz rozmycie lub zwieksz fizyczny rozmiar kodu.";
         }
 
         if (model.LowLight)
         {
-            return "Popraw oswietlenie albo uzyj wyzszego poziomu korekty bledu.";
+            return model.Language == "en" ? "Improve lighting or use a higher error correction level." : "Popraw oswietlenie albo uzyj wyzszego poziomu korekty bledu.";
         }
 
         if (moduleCount >= 37)
         {
-            return "Skroc tekst lub drukuj kod w wiekszym rozmiarze.";
+            return model.Language == "en" ? "Shorten the content or print the code larger." : "Skroc tekst lub drukuj kod w wiekszym rozmiarze.";
         }
 
         if (errorCorrectionLevel is QrGenerator.ECCLevel.L or QrGenerator.ECCLevel.M)
         {
-            return "Podnies korekte bledu do Q albo H.";
+            return model.Language == "en" ? "Raise error correction to Q or H." : "Podnies korekte bledu do Q albo H.";
         }
 
-        return "Zwieksz kontrast i unikaj skanowania ze zbyt duzej odleglosci.";
+        return model.Language == "en"
+            ? "Increase contrast and avoid scanning from too far away."
+            : "Zwieksz kontrast i unikaj skanowania ze zbyt duzej odleglosci.";
     }
 
     private static byte[] CreateSvg(string text, QrGenerator.ECCLevel errorCorrectionLevel)
@@ -483,5 +640,96 @@ public class HomeController : Controller
             "H" => QrGenerator.ECCLevel.H,
             _ => QrGenerator.ECCLevel.Q
         };
+    }
+
+    private UserPreferences ReadPreferences()
+    {
+        if (!Request.Cookies.TryGetValue(PreferencesCookieName, out var value) || string.IsNullOrWhiteSpace(value))
+        {
+            return new UserPreferences();
+        }
+
+        try
+        {
+            return JsonSerializer.Deserialize<UserPreferences>(value) ?? new UserPreferences();
+        }
+        catch (JsonException)
+        {
+            return new UserPreferences();
+        }
+    }
+
+    private void SavePreferences(UserPreferences preferences)
+    {
+        preferences.Language = UiText.NormalizeLanguage(preferences.Language);
+        preferences.Theme = preferences.Theme == "dark" ? "dark" : "light";
+        preferences.Recent = preferences.Recent.Take(15).ToList();
+
+        Response.Cookies.Append(PreferencesCookieName, JsonSerializer.Serialize(preferences), new CookieOptions
+        {
+            Expires = DateTimeOffset.UtcNow.AddMonths(6),
+            HttpOnly = true,
+            IsEssential = true,
+            SameSite = SameSiteMode.Lax,
+            Secure = Request.IsHttps
+        });
+    }
+
+    private void SetPreferenceViewData(UserPreferences preferences)
+    {
+        ViewData["Language"] = preferences.Language;
+        ViewData["Theme"] = preferences.Theme;
+    }
+
+    private static UserPreferences UpdateRecentPreferences(UserPreferences preferences, QrCodeViewModel model)
+    {
+        preferences.Recent.Insert(0, new RecentPreferenceSnapshot
+        {
+            Action = "generate",
+            ContentType = model.ContentType,
+            ErrorCorrectionLevel = model.ErrorCorrectionLevel,
+            CameraProfile = model.CameraProfile,
+            PrintFormat = model.PrintFormat,
+            PrintGradient = model.PrintGradient,
+            DesignTemplate = model.DesignTemplate,
+            DesignEnabled = model.DesignEnabled,
+            DarkModePreference = model.DarkMode
+        });
+
+        preferences.Recent = preferences.Recent.Take(15).ToList();
+
+        return preferences;
+    }
+
+    private static QrCodeViewModel ApplyPreferenceDefaults(QrCodeViewModel model, UserPreferences preferences)
+    {
+        model.Language = preferences.Language;
+        model.ThemePreference = preferences.Theme;
+
+        if (preferences.Recent.Count == 0)
+        {
+            return model;
+        }
+
+        model.ContentType = MostCommon(preferences.Recent.Select(item => item.ContentType), model.ContentType);
+        model.ErrorCorrectionLevel = MostCommon(preferences.Recent.Select(item => item.ErrorCorrectionLevel), model.ErrorCorrectionLevel);
+        model.CameraProfile = MostCommon(preferences.Recent.Select(item => item.CameraProfile), model.CameraProfile);
+        model.PrintFormat = MostCommon(preferences.Recent.Select(item => item.PrintFormat), model.PrintFormat);
+        model.PrintGradient = MostCommon(preferences.Recent.Select(item => item.PrintGradient), model.PrintGradient);
+        model.DesignTemplate = MostCommon(preferences.Recent.Select(item => item.DesignTemplate), model.DesignTemplate);
+        model.DesignEnabled = preferences.Recent.Count(item => item.DesignEnabled) > preferences.Recent.Count / 2;
+        model.DarkMode = preferences.Recent.Count(item => item.DarkModePreference) > preferences.Recent.Count / 2;
+
+        return model;
+    }
+
+    private static string MostCommon(IEnumerable<string> values, string fallback)
+    {
+        return values
+            .Where(value => !string.IsNullOrWhiteSpace(value))
+            .GroupBy(value => value)
+            .OrderByDescending(group => group.Count())
+            .Select(group => group.Key)
+            .FirstOrDefault() ?? fallback;
     }
 }

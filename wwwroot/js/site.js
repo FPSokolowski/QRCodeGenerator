@@ -1,4 +1,26 @@
-﻿// Please see documentation at https://learn.microsoft.com/aspnet/core/client-side/bundling-and-minification
-// for details on configuring this project to bundle and minify static web assets.
+(() => {
+  const contentTypeInputs = document.querySelectorAll('input[name="ContentType"]');
+  const contentPanels = document.querySelectorAll("[data-content-panel]");
 
-// Write your JavaScript code.
+  function setActiveContentPanel() {
+    const activeValue = document.querySelector('input[name="ContentType"]:checked')?.value || "general";
+
+    contentPanels.forEach((panel) => {
+      const isActive = panel.dataset.contentPanel === activeValue;
+      panel.hidden = !isActive;
+      panel.querySelectorAll("input, select, textarea").forEach((field) => {
+        field.disabled = !isActive;
+      });
+    });
+  }
+
+  contentTypeInputs.forEach((input) => input.addEventListener("change", setActiveContentPanel));
+  setActiveContentPanel();
+
+  if (window.qrResultShouldOpen && window.bootstrap) {
+    const modalElement = document.getElementById("qrResultModal");
+    if (modalElement) {
+      new bootstrap.Modal(modalElement).show();
+    }
+  }
+})();

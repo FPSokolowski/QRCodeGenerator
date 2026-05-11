@@ -1,0 +1,48 @@
+@using QRCodeGenerator.Services
+@{
+    var language = ViewData["Language"] as string ?? "pl";
+    ViewData["Title"] = UiText.Get(language, "DynamicQr");
+    var features = new[]
+    {
+        new { Icon = "monitoring", Title = "TrafficAnalytics", Copy = "TrafficAnalyticsCopy", Class = "feature-large" },
+        new { Icon = "link", Title = "DynamicLinks", Copy = "DynamicLinksCopy", Class = "feature-tall" },
+        new { Icon = "group", Title = "Users", Copy = "UsersCopy", Class = "" },
+        new { Icon = "timer_off", Title = "Expiration", Copy = "ExpirationCopy", Class = "" },
+        new { Icon = "folder_special", Title = "SavedCodes", Copy = "SavedCodesCopy", Class = "" },
+        new { Icon = "layers", Title = "QrBatches", Copy = "QrBatchesCopy", Class = "feature-wide" },
+        new { Icon = "alt_route", Title = "QrRouting", Copy = "QrRoutingCopy", Class = "feature-wide" }
+    };
+}
+
+<section class="dynamic-stage">
+    <div class="dynamic-hero">
+        <span class="status-pill">
+            <span class="material-symbols-outlined">construction</span>
+            @UiText.Get(language, "DynamicBadge")
+        </span>
+        <h1>@UiText.Get(language, "DynamicHeroTitle")</h1>
+        <p>@UiText.Get(language, "DynamicHeroCopy")</p>
+    </div>
+
+    <section class="feature-grid" aria-label="@UiText.Get(language, "PlannedFeatures")">
+        @foreach (var feature in features)
+        {
+            <article class="feature-card glass-panel @feature.Class">
+                <span class="material-symbols-outlined feature-icon">@feature.Icon</span>
+                <h2>@UiText.Get(language, feature.Title)</h2>
+                <p>@UiText.Get(language, feature.Copy)</p>
+            </article>
+        }
+    </section>
+
+    <section class="notify-panel glass-panel">
+        <div>
+            <h2>@UiText.Get(language, "NotifyTitle")</h2>
+            <p>@UiText.Get(language, "NotifyCopy")</p>
+        </div>
+        <form class="notify-form" onsubmit="return false;">
+            <input class="neo-input" type="email" placeholder="@UiText.Get(language, "EmailPlaceholder")" aria-label="@UiText.Get(language, "EmailAddress")" />
+            <button class="generate-button compact" type="submit">@UiText.Get(language, "NotifyMe")</button>
+        </form>
+    </section>
+</section>

@@ -36,6 +36,9 @@ public class QrCodeViewModel
     [Display(Name = "Firma")]
     public string? VCardCompany { get; set; }
 
+    [Display(Name = "Stanowisko")]
+    public string? VCardJobTitle { get; set; }
+
     [Display(Name = "Telefon")]
     public string? VCardPhone { get; set; }
 
@@ -91,7 +94,7 @@ public class QrCodeViewModel
     public string? PdfUrl { get; set; }
 
     [Display(Name = "Platforma")]
-    public string SocialPlatform { get; set; } = "profile";
+    public string SocialPlatform { get; set; } = "instagram";
 
     [Display(Name = "Profil social")]
     public string? SocialUrl { get; set; }
@@ -195,6 +198,8 @@ public class QrCodeViewModel
 
     public string? BrandingLogoDataUri { get; set; }
 
+    public string? SocialLogoDataUri { get; set; }
+
     [Required]
     [RegularExpression("none|soft|ticket|poster|badge", ErrorMessage = "Wybierz poprawna ramke.")]
     [Display(Name = "Ramka")]
@@ -219,6 +224,10 @@ public class QrCodeViewModel
     public PrintWorkflowResult? PrintWorkflowResult { get; set; }
 
     public BrandingWorkflowResult? BrandingWorkflowResult { get; set; }
+
+    public string Language { get; set; } = "pl";
+
+    public string ThemePreference { get; set; } = "light";
 
     public bool ShowResult => !string.IsNullOrWhiteSpace(PngDataUri);
 
