@@ -12,36 +12,591 @@
             <p>Wpisz tekst, wygeneruj kod i zapisz go lokalnie w wybranym formacie.</p>
         </div>
 
-        <form asp-action="Index" method="post" class="qr-form">
+        <form asp-action="Index" method="post" enctype="multipart/form-data" class="qr-form">
             @Html.AntiForgeryToken()
-            <label asp-for="Text" class="form-label"></label>
-            <div class="input-group input-group-lg">
-                <input asp-for="Text" class="form-control" placeholder="np. https://example.com albo dowolny tekst" autocomplete="off" />
-                <button class="btn btn-primary" type="submit">Generuj</button>
+            <div class="content-type-tabs" role="tablist" aria-label="Typ QR Content">
+                @foreach (var option in Model.ContentTypeOptions)
+                {
+                    var isChecked = Model.ContentType == option.Value;
+                    <input class="btn-check" type="radio" asp-for="ContentType" id="content-@option.Value" value="@option.Value" checked="@isChecked" />
+                    <label class="btn btn-outline-primary" for="content-@option.Value">@option.Label</label>
+                }
             </div>
-            <span asp-validation-for="Text" class="text-danger"></span>
+
+            <div class="content-panel" data-content-panel="general">
+                <label asp-for="Text" class="form-label"></label>
+                <textarea asp-for="Text" class="form-control form-control-lg" rows="3" placeholder="Dowolny tekst lub payload QR"></textarea>
+                <span asp-validation-for="Text" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="url">
+                <label asp-for="Url" class="form-label"></label>
+                <input asp-for="Url" class="form-control form-control-lg" placeholder="https://example.com" />
+                <span asp-validation-for="Url" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="wifi">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="WifiSsid" class="form-label"></label>
+                        <input asp-for="WifiSsid" class="form-control" />
+                        <span asp-validation-for="WifiSsid" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="WifiPassword" class="form-label"></label>
+                        <input asp-for="WifiPassword" class="form-control" />
+                    </div>
+                    <div>
+                        <label asp-for="WifiEncryption" class="form-label"></label>
+                        <select asp-for="WifiEncryption" class="form-select">
+                            <option value="WPA">WPA/WPA2</option>
+                            <option value="WEP">WEP</option>
+                            <option value="nopass">Brak hasla</option>
+                        </select>
+                    </div>
+                    <div class="low-light-check">
+                        <div class="form-check form-switch">
+                            <input asp-for="WifiHidden" class="form-check-input" type="checkbox" />
+                            <label asp-for="WifiHidden" class="form-check-label"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="vcard">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="VCardName" class="form-label"></label>
+                        <input asp-for="VCardName" class="form-control" />
+                        <span asp-validation-for="VCardName" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="VCardCompany" class="form-label"></label>
+                        <input asp-for="VCardCompany" class="form-control" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardPhone" class="form-label"></label>
+                        <input asp-for="VCardPhone" class="form-control" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardEmail" class="form-label"></label>
+                        <input asp-for="VCardEmail" class="form-control" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="email">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="EmailAddress" class="form-label"></label>
+                        <input asp-for="EmailAddress" class="form-control" placeholder="hello@example.com" />
+                        <span asp-validation-for="EmailAddress" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EmailSubject" class="form-label"></label>
+                        <input asp-for="EmailSubject" class="form-control" />
+                    </div>
+                    <div class="print-span">
+                        <label asp-for="EmailBody" class="form-label"></label>
+                        <textarea asp-for="EmailBody" class="form-control" rows="2"></textarea>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="sms">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="PhoneNumber" class="form-label"></label>
+                        <input asp-for="PhoneNumber" class="form-control" />
+                        <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="SmsMessage" class="form-label"></label>
+                        <input asp-for="SmsMessage" class="form-control" />
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="phone">
+                <label asp-for="PhoneNumber" class="form-label"></label>
+                <input asp-for="PhoneNumber" class="form-control form-control-lg" placeholder="+48123123123" />
+                <span asp-validation-for="PhoneNumber" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="geo">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="GeoLatitude" class="form-label"></label>
+                        <input asp-for="GeoLatitude" class="form-control" placeholder="52.2297" />
+                        <span asp-validation-for="GeoLatitude" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="GeoLongitude" class="form-label"></label>
+                        <input asp-for="GeoLongitude" class="form-control" placeholder="21.0122" />
+                        <span asp-validation-for="GeoLongitude" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="event">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="EventTitle" class="form-label"></label>
+                        <input asp-for="EventTitle" class="form-control" />
+                        <span asp-validation-for="EventTitle" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EventLocation" class="form-label"></label>
+                        <input asp-for="EventLocation" class="form-control" />
+                    </div>
+                    <div>
+                        <label asp-for="EventStart" class="form-label"></label>
+                        <input asp-for="EventStart" class="form-control" type="datetime-local" />
+                        <span asp-validation-for="EventStart" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EventEnd" class="form-label"></label>
+                        <input asp-for="EventEnd" class="form-control" type="datetime-local" />
+                        <span asp-validation-for="EventEnd" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="crypto">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="CryptoNetwork" class="form-label"></label>
+                        <select asp-for="CryptoNetwork" class="form-select">
+                            <option value="bitcoin">BTC</option>
+                            <option value="ethereum">ETH</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label asp-for="CryptoAmount" class="form-label"></label>
+                        <input asp-for="CryptoAmount" class="form-control" placeholder="0.01" />
+                    </div>
+                    <div class="print-span">
+                        <label asp-for="CryptoAddress" class="form-label"></label>
+                        <input asp-for="CryptoAddress" class="form-control" />
+                        <span asp-validation-for="CryptoAddress" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="app">
+                <label asp-for="AppStoreUrl" class="form-label"></label>
+                <input asp-for="AppStoreUrl" class="form-control form-control-lg" placeholder="https://apps.apple.com/... albo https://play.google.com/..." />
+                <span asp-validation-for="AppStoreUrl" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="pdf">
+                <label asp-for="PdfUrl" class="form-label"></label>
+                <input asp-for="PdfUrl" class="form-control form-control-lg" placeholder="https://example.com/document.pdf" />
+                <span asp-validation-for="PdfUrl" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="social">
+                <div class="content-grid">
+                    <div>
+                        <label asp-for="SocialPlatform" class="form-label"></label>
+                        <select asp-for="SocialPlatform" class="form-select">
+                            <option value="profile">Profil</option>
+                            <option value="instagram">Instagram</option>
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="x">X</option>
+                            <option value="facebook">Facebook</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label asp-for="SocialUrl" class="form-label"></label>
+                        <input asp-for="SocialUrl" class="form-control" placeholder="https://..." />
+                        <span asp-validation-for="SocialUrl" class="text-danger"></span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="content-panel" data-content-panel="multilink">
+                <label asp-for="MultiLinks" class="form-label"></label>
+                <textarea asp-for="MultiLinks" class="form-control" rows="4" placeholder="Wpisz po jednym linku w linii"></textarea>
+                <span asp-validation-for="MultiLinks" class="text-danger"></span>
+            </div>
+
+            <div class="content-panel" data-content-panel="plain">
+                <label asp-for="Text" class="form-label"></label>
+                <textarea asp-for="Text" class="form-control form-control-lg" rows="3" placeholder="Dowolny tekst"></textarea>
+                <span asp-validation-for="Text" class="text-danger"></span>
+            </div>
+
+            <button class="btn btn-primary btn-lg generate-button" type="submit">Generuj</button>
+
+            <div class="qr-options">
+                <label asp-for="ErrorCorrectionLevel" class="form-label"></label>
+                <select asp-for="ErrorCorrectionLevel" class="form-select" aria-describedby="errorCorrectionHelp">
+                    @foreach (var option in Model.ErrorCorrectionOptions)
+                    {
+                        <option value="@option.Value">@option.Label</option>
+                    }
+                </select>
+                <div id="errorCorrectionHelp" class="form-text">Wyższy poziom zwieksza odpornosc kodu, ale moze powiekszyc QR.</div>
+                <span asp-validation-for="ErrorCorrectionLevel" class="text-danger"></span>
+            </div>
+
+            <div class="scanner-test">
+                <h2>QR Validation / Scanner Testing</h2>
+                <div class="scanner-grid">
+                    <div>
+                        <label asp-for="CameraProfile" class="form-label"></label>
+                        <select asp-for="CameraProfile" class="form-select">
+                            @foreach (var option in Model.CameraProfileOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="CameraProfile" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="ScanDistanceCm" class="form-label"></label>
+                        <input asp-for="ScanDistanceCm" class="form-control" type="number" min="10" max="200" step="5" />
+                        <span asp-validation-for="ScanDistanceCm" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="BlurLevel" class="form-label"></label>
+                        <input asp-for="BlurLevel" class="form-range" type="range" min="0" max="10" />
+                        <span asp-validation-for="BlurLevel" class="text-danger"></span>
+                    </div>
+                    <div class="low-light-check">
+                        <div class="form-check form-switch">
+                            <input asp-for="LowLight" class="form-check-input" type="checkbox" />
+                            <label asp-for="LowLight" class="form-check-label"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="design-workflow">
+                <div class="section-title-row">
+                    <h2>Design / Branding</h2>
+                    <div class="form-check form-switch">
+                        <input asp-for="DesignEnabled" class="form-check-input" type="checkbox" />
+                        <label asp-for="DesignEnabled" class="form-check-label"></label>
+                    </div>
+                </div>
+                <div class="validation-warning">
+                    Po uzyciu brandingu uruchom QR Validation. Kolory, logo, gradienty, zaokraglenia i dark mode moga sprawic, ze niektore urzadzenia beda mialy problem ze skanowaniem.
+                </div>
+                <div class="design-grid">
+                    <div>
+                        <label asp-for="DesignTemplate" class="form-label"></label>
+                        <select asp-for="DesignTemplate" class="form-select">
+                            @foreach (var option in Model.DesignTemplateOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="DesignTemplate" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="FrameStyle" class="form-label"></label>
+                        <select asp-for="FrameStyle" class="form-select">
+                            @foreach (var option in Model.FrameStyleOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="FrameStyle" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="ForegroundColor" class="form-label"></label>
+                        <input asp-for="ForegroundColor" class="form-control form-control-color" type="color" />
+                        <span asp-validation-for="ForegroundColor" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="BackgroundColor" class="form-label"></label>
+                        <input asp-for="BackgroundColor" class="form-control form-control-color" type="color" />
+                        <span asp-validation-for="BackgroundColor" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="QrDesignGradient" class="form-label"></label>
+                        <select asp-for="QrDesignGradient" class="form-select">
+                            @foreach (var option in Model.QrDesignGradientOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="QrDesignGradient" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EyeStyle" class="form-label"></label>
+                        <select asp-for="EyeStyle" class="form-select">
+                            @foreach (var option in Model.EyeStyleOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="EyeStyle" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="BrandingLogo" class="form-label"></label>
+                        <input asp-for="BrandingLogo" class="form-control" type="file" accept="image/*" />
+                        <span asp-validation-for="BrandingLogo" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="CtaText" class="form-label"></label>
+                        <input asp-for="CtaText" class="form-control" placeholder="Scan me" />
+                        <span asp-validation-for="CtaText" class="text-danger"></span>
+                    </div>
+                    <div class="low-light-check">
+                        <div class="form-check form-switch">
+                            <input asp-for="RoundedModules" class="form-check-input" type="checkbox" />
+                            <label asp-for="RoundedModules" class="form-check-label"></label>
+                        </div>
+                    </div>
+                    <div class="low-light-check">
+                        <div class="form-check form-switch">
+                            <input asp-for="DarkMode" class="form-check-input" type="checkbox" />
+                            <label asp-for="DarkMode" class="form-check-label"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="print-workflow">
+                <h2>Print / Physical Workflow</h2>
+                <div class="print-grid">
+                    <div>
+                        <label asp-for="PrintFormat" class="form-label"></label>
+                        <select asp-for="PrintFormat" class="form-select">
+                            @foreach (var option in Model.PrintFormatOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="PrintFormat" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintGradient" class="form-label"></label>
+                        <select asp-for="PrintGradient" class="form-select">
+                            @foreach (var option in Model.PrintGradientOptions)
+                            {
+                                <option value="@option.Value">@option.Label</option>
+                            }
+                        </select>
+                        <span asp-validation-for="PrintGradient" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintTitle" class="form-label"></label>
+                        <input asp-for="PrintTitle" class="form-control" placeholder="np. Menu, Wi-Fi, Link do wydarzenia" />
+                        <span asp-validation-for="PrintTitle" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintLabel" class="form-label"></label>
+                        <input asp-for="PrintLabel" class="form-control" placeholder="np. RECEPCJA" />
+                        <span asp-validation-for="PrintLabel" class="text-danger"></span>
+                    </div>
+                    <div class="print-span">
+                        <label asp-for="PrintDescription" class="form-label"></label>
+                        <textarea asp-for="PrintDescription" class="form-control" rows="2" placeholder="Krotki opis widoczny na wydruku"></textarea>
+                        <span asp-validation-for="PrintDescription" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintImage" class="form-label"></label>
+                        <input asp-for="PrintImage" class="form-control" type="file" accept="image/*" />
+                        <span asp-validation-for="PrintImage" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="QrPrintSizeMm" class="form-label"></label>
+                        <input asp-for="QrPrintSizeMm" class="form-control" type="number" min="20" max="180" step="5" />
+                        <span asp-validation-for="QrPrintSizeMm" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintMarginMm" class="form-label"></label>
+                        <input asp-for="PrintMarginMm" class="form-control" type="number" min="0" max="40" />
+                        <span asp-validation-for="PrintMarginMm" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="PrintBleedMm" class="form-label"></label>
+                        <input asp-for="PrintBleedMm" class="form-control" type="number" min="0" max="8" />
+                        <span asp-validation-for="PrintBleedMm" class="text-danger"></span>
+                    </div>
+                    <div>
+                        <label asp-for="LabelCount" class="form-label"></label>
+                        <input asp-for="LabelCount" class="form-control" type="number" min="1" max="24" />
+                        <span asp-validation-for="LabelCount" class="text-danger"></span>
+                    </div>
+                    <div class="low-light-check">
+                        <div class="form-check form-switch">
+                            <input asp-for="CmykSafeExport" class="form-check-input" type="checkbox" />
+                            <label asp-for="CmykSafeExport" class="form-check-label"></label>
+                        </div>
+                    </div>
+                </div>
+            </div>
         </form>
     </div>
 </section>
 
 @if (Model.ShowResult)
 {
+    var blur = Model.BlurLevel * 0.35;
+    var brightness = Model.LowLight ? 0.42 : 1;
+    var distanceWidth = Math.Clamp(370 - Model.ScanDistanceCm, 180, 320);
+    var sheetClass = $"sheet-{Model.PrintFormat}";
+    var printImage = Model.PrintImageDataUri;
+    var margin = Model.PrintMarginMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    var bleed = Model.PrintBleedMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    var qrSize = Model.QrPrintSizeMm.ToString(System.Globalization.CultureInfo.InvariantCulture);
+    var labelCopies = Math.Clamp(Model.LabelCount, 1, 24);
+    var designEnabledClass = Model.DesignEnabled ? "design-enabled" : "design-disabled";
+    var darkClass = Model.DarkMode ? "design-dark" : "design-light";
+    var roundedClass = Model.RoundedModules ? "modules-rounded" : string.Empty;
+    var eyeClass = $"eyes-{Model.EyeStyle}";
+    var frameClass = $"frame-{Model.FrameStyle}";
+    var templateClass = $"template-{Model.DesignTemplate}";
+    var designStyle = $"--qr-fg:{Model.ForegroundColor}; --qr-bg:{Model.BackgroundColor};";
+
     <div class="modal fade" id="qrResultModal" tabindex="-1" aria-labelledby="qrResultModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
                     <h2 class="modal-title fs-5" id="qrResultModalLabel">Wygenerowany kod QR</h2>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zamknij"></button>
                 </div>
                 <div class="modal-body text-center">
-                    <img class="qr-preview" src="@Model.PngDataUri" alt="Wygenerowany kod QR" />
+                    <div class="scanner-preview @(Model.LowLight ? "is-low-light" : "")">
+                        <div class="branded-qr @designEnabledClass @darkClass @roundedClass @eyeClass @frameClass @templateClass gradient-qr-@Model.QrDesignGradient" style="width: @(distanceWidth)px; @designStyle filter: blur(@(blur.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture))px) brightness(@(brightness.ToString("0.##", System.Globalization.CultureInfo.InvariantCulture)));">
+                            <img class="qr-preview" src="@Model.PngDataUri" alt="Wygenerowany kod QR" />
+                            @if (Model.DesignEnabled)
+                            {
+                                <span class="eye eye-tl"></span>
+                                <span class="eye eye-tr"></span>
+                                <span class="eye eye-bl"></span>
+                                @if (!string.IsNullOrWhiteSpace(Model.BrandingLogoDataUri))
+                                {
+                                    <span class="brand-logo-mark"><img src="@Model.BrandingLogoDataUri" alt="" /></span>
+                                }
+                                @if (!string.IsNullOrWhiteSpace(Model.CtaText))
+                                {
+                                    <span class="qr-cta">@Model.CtaText</span>
+                                }
+                            }
+                        </div>
+                    </div>
+
+                    @if (Model.ValidationResult is not null)
+                    {
+                        <div class="score-panel">
+                            <div class="score-header">
+                                <strong>@Model.ValidationResult.Verdict</strong>
+                                <span>@Model.ValidationResult.ModuleCount x @Model.ValidationResult.ModuleCount modules</span>
+                            </div>
+                            <div class="score-row">
+                                <div class="score-label">
+                                    <span>Readability score</span>
+                                    <strong>@Model.ValidationResult.ReadabilityScore/100</strong>
+                                </div>
+                                <div class="progress" aria-label="Readability score">
+                                    <div class="progress-bar @(Model.ValidationResult.ReadabilityScore >= 70 ? "bg-success" : "bg-warning")" style="width: @Model.ValidationResult.ReadabilityScore%"></div>
+                                </div>
+                            </div>
+                            <div class="score-row">
+                                <div class="score-label">
+                                    <span>Print safety score</span>
+                                    <strong>@Model.ValidationResult.PrintSafetyScore/100</strong>
+                                </div>
+                                <div class="progress" aria-label="Print safety score">
+                                    <div class="progress-bar @(Model.ValidationResult.PrintSafetyScore >= 70 ? "bg-success" : "bg-warning")" style="width: @Model.ValidationResult.PrintSafetyScore%"></div>
+                                </div>
+                            </div>
+                            <p class="score-note">@Model.ValidationResult.Recommendation</p>
+                        </div>
+                    }
+
+                    @if (Model.BrandingWorkflowResult is not null)
+                    {
+                        <div class="branding-score-panel @(Model.BrandingWorkflowResult.ShouldRunValidation ? "is-warning" : "")">
+                            <strong>Design / Branding risk: @Model.BrandingWorkflowResult.RiskScore/100</strong>
+                            <p>@Model.BrandingWorkflowResult.Warning</p>
+                            <p>@Model.BrandingWorkflowResult.Recommendation</p>
+                        </div>
+                    }
+
+                    <div class="print-preview-panel">
+                        <div class="print-toolbar">
+                            <div>
+                                <strong>Print / Physical Workflow</strong>
+                                @if (Model.PrintWorkflowResult is not null)
+                                {
+                                    <span>@Model.PrintWorkflowResult.FormatLabel, @Model.PrintWorkflowResult.EffectiveDpi DPI</span>
+                                }
+                            </div>
+                            <button class="btn btn-primary" type="button" onclick="window.print()">Drukuj / zapisz PDF</button>
+                        </div>
+                        <div id="printArea" class="print-area">
+                            <article class="print-sheet @sheetClass gradient-@Model.PrintGradient @templateClass" style="--print-margin: @(margin)mm; --print-bleed: @(bleed)mm; --qr-size: @(qrSize)mm;">
+                                <div class="bleed-guide"></div>
+                                <div class="print-content">
+                                    @if (!string.IsNullOrWhiteSpace(Model.PrintLabel))
+                                    {
+                                        <span class="print-label">@Model.PrintLabel</span>
+                                    }
+                                    @if (!string.IsNullOrWhiteSpace(printImage))
+                                    {
+                                        <img class="print-image" src="@printImage" alt="" />
+                                    }
+                                    <h2>@(string.IsNullOrWhiteSpace(Model.PrintTitle) ? "Skanuj kod QR" : Model.PrintTitle)</h2>
+                                    @if (!string.IsNullOrWhiteSpace(Model.PrintDescription))
+                                    {
+                                        <p>@Model.PrintDescription</p>
+                                    }
+                                    <div class="branded-qr print-qr @designEnabledClass @darkClass @roundedClass @eyeClass @frameClass @templateClass gradient-qr-@Model.QrDesignGradient" style="@designStyle">
+                                        <img src="@Model.PngDataUri" alt="Kod QR do druku" />
+                                        @if (Model.DesignEnabled)
+                                        {
+                                            <span class="eye eye-tl"></span>
+                                            <span class="eye eye-tr"></span>
+                                            <span class="eye eye-bl"></span>
+                                            @if (!string.IsNullOrWhiteSpace(Model.BrandingLogoDataUri))
+                                            {
+                                                <span class="brand-logo-mark"><img src="@Model.BrandingLogoDataUri" alt="" /></span>
+                                            }
+                                            @if (!string.IsNullOrWhiteSpace(Model.CtaText))
+                                            {
+                                                <span class="qr-cta">@Model.CtaText</span>
+                                            }
+                                        }
+                                    </div>
+                                    @if (labelCopies > 1)
+                                    {
+                                        <div class="label-strip" aria-label="Etykiety">
+                                            @for (var i = 1; i <= labelCopies; i++)
+                                            {
+                                                <span>@(string.IsNullOrWhiteSpace(Model.PrintLabel) ? $"Label {i}" : Model.PrintLabel)</span>
+                                            }
+                                        </div>
+                                    }
+                                </div>
+                            </article>
+                        </div>
+                        @if (Model.PrintWorkflowResult is not null)
+                        {
+                            <div class="print-checks">
+                                <span class="@(Model.PrintWorkflowResult.IsDpiSafe ? "check-ok" : "check-warn")">DPI: @Model.PrintWorkflowResult.EffectiveDpi</span>
+                                <span class="@(Model.PrintWorkflowResult.IsBleedSafe ? "check-ok" : "check-warn")">Bleed: @Model.PrintBleedMm mm</span>
+                                <span class="@(Model.PrintWorkflowResult.IsCmykSafe ? "check-ok" : "check-warn")">CMYK-safe: @(Model.PrintWorkflowResult.IsCmykSafe ? "tak" : "uwaga")</span>
+                                <span>Margines: @Model.PrintMarginMm mm</span>
+                            </div>
+                            <p class="score-note">@Model.PrintWorkflowResult.Recommendation</p>
+                        }
+                    </div>
+
                     <div class="download-actions">
                         @foreach (var format in Model.Formats)
                         {
                             <form asp-action="Download" method="post">
                                 @Html.AntiForgeryToken()
-                                <input type="hidden" name="text" value="@Model.Text" />
+                                <input type="hidden" name="text" value="@Model.GeneratedPayload" />
                                 <input type="hidden" name="format" value="@format.Value" />
+                                <input type="hidden" name="errorCorrectionLevel" value="@Model.ErrorCorrectionLevel" />
                                 <button class="btn btn-outline-primary" type="submit">Zapisz @format.Label</button>
                             </form>
                         }
@@ -61,4 +616,23 @@
             qrModal.show();
         </script>
     }
+    <script>
+        const contentTypeInputs = document.querySelectorAll('input[name="ContentType"]');
+        const contentPanels = document.querySelectorAll('[data-content-panel]');
+
+        function setActiveContentPanel() {
+            const activeValue = document.querySelector('input[name="ContentType"]:checked')?.value || 'general';
+
+            contentPanels.forEach(panel => {
+                const isActive = panel.dataset.contentPanel === activeValue;
+                panel.hidden = !isActive;
+                panel.querySelectorAll('input, select, textarea').forEach(field => {
+                    field.disabled = !isActive;
+                });
+            });
+        }
+
+        contentTypeInputs.forEach(input => input.addEventListener('change', setActiveContentPanel));
+        setActiveContentPanel();
+    </script>
 }

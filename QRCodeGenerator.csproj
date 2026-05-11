@@ -1,13 +1,25 @@
-<Project Sdk="Microsoft.NET.Sdk.Web">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
-  <PropertyGroup>
-    <TargetFramework>net10.0</TargetFramework>
-    <Nullable>enable</Nullable>
-    <ImplicitUsings>enable</ImplicitUsings>
-  </PropertyGroup>
+    <PropertyGroup>
+        <TargetFramework>net10.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+    </PropertyGroup>
 
-  <ItemGroup>
-    <PackageReference Include="QRCoder" Version="1.8.0" />
-  </ItemGroup>
+    <ItemGroup>
+        <PackageReference Include="QRCoder" Version="1.8.0" />
+    </ItemGroup>
 
+    <ItemGroup>
+      <Content Update="wwwroot\favicon.png">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+      <Content Update="wwwroot\logo.png">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+
+    <Target Name="AfterPublish" AfterTargets="Publish">
+        <Exec Command="scp -r &quot;$(PublishDir)*&quot; filsok@192.168.50.44:/home/filsok/hosting/qrcodegenerator-app" />
+    </Target>
 </Project>
