@@ -282,7 +282,7 @@
             <aside class="preview-panel">
                 <div class="qr-orbit">
                     <div class="qr-glow"></div>
-                    <div class="qr-card modifiable-qr @(hasResult ? "" : "placeholder-card")" id="mainQrPreview" data-original-src="@Model.PngDataUri">
+                    <div class="qr-card @(hasResult ? "modifiable-qr" : "placeholder-card")" id="mainQrPreview" data-original-src="@Model.PngDataUri">
                         @if (hasResult)
                         {
                             <img src="@Model.PngDataUri" alt="@UiText.Get(language, "GeneratedQr")" />

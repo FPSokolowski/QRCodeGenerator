@@ -227,6 +227,7 @@
 
       const mainPreview = document.getElementById("mainQrPreview");
       mainPreview?.classList.remove("placeholder-card");
+      mainPreview?.classList.add("modifiable-qr");
       setGeneratedPayload(state.payload);
       setQrImageSource(state.pngDataUri);
       currentQrSettings = { ...defaultQrSettings, ...(state.settings || {}) };
