@@ -33,6 +33,7 @@ public class HomeController : Controller
         await LoadPrintImageAsync(model);
         await LoadBrandingLogoAsync(model);
         var payload = BuildQrPayload(model);
+        LocalizeModelState(model.Language);
 
         if (!ModelState.IsValid)
         {
@@ -60,7 +61,7 @@ public class HomeController : Controller
 
         if (string.IsNullOrWhiteSpace(generatedPayload))
         {
-            ModelState.AddModelError(nameof(model.GeneratedPayload), "Brak kodu QR do walidacji.");
+            ModelState.AddModelError(nameof(model.GeneratedPayload), T(model, "ValidationNoQr"));
             return View(nameof(Index), model);
         }
 
@@ -106,9 +107,10 @@ public class HomeController : Controller
     [ValidateAntiForgeryToken]
     public IActionResult Download(string text, string format, string errorCorrectionLevel = "Q")
     {
+        var preferences = ReadPreferences();
         if (string.IsNullOrWhiteSpace(text))
         {
-            return BadRequest("Tekst jest wymagany.");
+            return BadRequest(UiText.Get(preferences.Language, "ValidationTextRequired"));
         }
 
         var level = ParseErrorCorrectionLevel(errorCorrectionLevel);
@@ -120,7 +122,7 @@ public class HomeController : Controller
             "png" => File(CreatePng(text, level), "image/png", fileName),
             "svg" => File(CreateSvg(text, level), "image/svg+xml", fileName),
             "txt" => File(CreatePlainText(text, level), "text/plain; charset=utf-8", fileName),
-            _ => BadRequest("Nieobslugiwany format.")
+            _ => BadRequest(UiText.Get(preferences.Language, "ValidationUnsupportedFormat"))
         };
     }
 
@@ -128,38 +130,102 @@ public class HomeController : Controller
     {
         return model.ContentType switch
         {
-            "url" => Require(model.Url, nameof(model.Url), "Wpisz adres strony."),
+            "url" => Require(model, model.Url, nameof(model.Url), "ValidationUrlRequired"),
             "wifi" => BuildWifiPayload(model),
             "vcard" => BuildVCardPayload(model),
             "email" => BuildEmailPayload(model),
             "sms" => BuildSmsPayload(model),
-            "phone" => $"tel:{Require(model.PhoneNumber, nameof(model.PhoneNumber), "Wpisz numer telefonu.")}",
+            "phone" => $"tel:{Require(model, model.PhoneNumber, nameof(model.PhoneNumber), "ValidationPhoneRequired")}",
             "geo" => BuildGeoPayload(model),
             "event" => BuildEventPayload(model),
             "crypto" => BuildCryptoPayload(model),
-            "app" => Require(model.AppStoreUrl, nameof(model.AppStoreUrl), "Wpisz link do aplikacji."),
-            "pdf" => Require(model.PdfUrl, nameof(model.PdfUrl), "Wpisz link do dokumentu PDF."),
+            "app" => Require(model, model.AppStoreUrl, nameof(model.AppStoreUrl), "ValidationAppRequired"),
+            "pdf" => Require(model, model.PdfUrl, nameof(model.PdfUrl), "ValidationPdfRequired"),
             "social" => BuildSocialPayload(model),
             "multilink" => BuildMultiLinkPayload(model),
-            "plain" => Require(model.Text, nameof(model.Text), "Wpisz tekst."),
-            _ => Require(model.Text, nameof(model.Text), "Wpisz tekst do zakodowania.")
+            "plain" => Require(model, model.Text, nameof(model.Text), "ValidationPlainTextRequired"),
+            _ => Require(model, model.Text, nameof(model.Text), "ValidationPayloadRequired")
         };
     }
 
-    private string Require(string? value, string fieldName, string errorMessage)
+    private string Require(QrCodeViewModel model, string? value, string fieldName, string errorKey)
     {
         if (!string.IsNullOrWhiteSpace(value))
         {
             return value.Trim();
         }
 
-        ModelState.AddModelError(fieldName, errorMessage);
+        ModelState.AddModelError(fieldName, T(model, errorKey));
         return string.Empty;
+    }
+
+    private static string T(QrCodeViewModel model, string key) => UiText.Get(model.Language, key);
+
+    private void LocalizeModelState(string language)
+    {
+        var map = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["Tekst moze miec maksymalnie 1000 znakow."] = "ValidationTextMax",
+            ["Wybierz poprawny typ QR."] = "ValidationContentType",
+            ["Wybierz poprawny poziom korekty bledu."] = "ValidationErrorCorrection",
+            ["Wybierz poprawny profil kamery."] = "ValidationCameraProfile",
+            ["Odleglosc musi byc w zakresie 10-200 cm."] = "ValidationScanDistance",
+            ["Rozmycie musi byc w zakresie 0-10."] = "ValidationBlur",
+            ["Wybierz poprawny format arkusza."] = "ValidationPrintFormat",
+            ["Tytul moze miec maksymalnie 80 znakow."] = "ValidationPrintTitleMax",
+            ["Opis moze miec maksymalnie 220 znakow."] = "ValidationDescriptionMax",
+            ["Etykieta moze miec maksymalnie 40 znakow."] = "ValidationLabelMax",
+            ["Wybierz poprawny gradient."] = "ValidationPrintGradient",
+            ["Margines musi byc w zakresie 0-40 mm."] = "ValidationPrintMargin",
+            ["Bleed musi byc w zakresie 0-8 mm."] = "ValidationBleed",
+            ["Rozmiar QR musi byc w zakresie 20-180 mm."] = "ValidationQrSize",
+            ["Liczba etykiet musi byc w zakresie 1-24."] = "ValidationLabelCount",
+            ["Podaj kolor w formacie HEX."] = "ValidationHexColor",
+            ["Wybierz poprawny gradient QR."] = "ValidationQrGradient",
+            ["Wybierz poprawny styl oczu."] = "ValidationEyeStyle",
+            ["Wybierz poprawna ramke."] = "ValidationFrame",
+            ["CTA moze miec maksymalnie 40 znakow."] = "ValidationCtaMax",
+            ["Wybierz poprawny template."] = "ValidationTemplate"
+        };
+
+        foreach (var key in ModelState.Keys.ToList())
+        {
+            var entry = ModelState[key];
+            if (entry is null || entry.Errors.Count == 0)
+            {
+                continue;
+            }
+
+            var translated = entry.Errors
+                .Select(error => TranslateValidationError(language, error.ErrorMessage, map))
+                .ToList();
+
+            entry.Errors.Clear();
+            foreach (var message in translated)
+            {
+                entry.Errors.Add(message);
+            }
+        }
+    }
+
+    private static string TranslateValidationError(string language, string message, IReadOnlyDictionary<string, string> map)
+    {
+        if (map.TryGetValue(message, out var key))
+        {
+            return UiText.Get(language, key);
+        }
+
+        if (message.StartsWith("The ", StringComparison.Ordinal) && message.EndsWith(" field is required.", StringComparison.Ordinal))
+        {
+            return UiText.Get(language, "ValidationRequired");
+        }
+
+        return message;
     }
 
     private string BuildWifiPayload(QrCodeViewModel model)
     {
-        var ssid = Require(model.WifiSsid, nameof(model.WifiSsid), "Wpisz nazwe sieci WiFi.");
+        var ssid = Require(model, model.WifiSsid, nameof(model.WifiSsid), "ValidationWifiSsidRequired");
         var encryption = model.WifiEncryption is "WEP" or "nopass" ? model.WifiEncryption : "WPA";
         var password = encryption == "nopass" ? string.Empty : EscapeWifi(model.WifiPassword ?? string.Empty);
 
@@ -168,7 +234,7 @@ public class HomeController : Controller
 
     private string BuildVCardPayload(QrCodeViewModel model)
     {
-        var name = Require(model.VCardName, nameof(model.VCardName), "Wpisz imie i nazwisko kontaktu.");
+        var name = Require(model, model.VCardName, nameof(model.VCardName), "ValidationVCardNameRequired");
 
         return string.Join("\n", new[]
         {
@@ -185,7 +251,7 @@ public class HomeController : Controller
 
     private string BuildEmailPayload(QrCodeViewModel model)
     {
-        var address = Require(model.EmailAddress, nameof(model.EmailAddress), "Wpisz adres email.");
+        var address = Require(model, model.EmailAddress, nameof(model.EmailAddress), "ValidationEmailRequired");
         var query = new List<string>();
 
         if (!string.IsNullOrWhiteSpace(model.EmailSubject))
@@ -203,7 +269,7 @@ public class HomeController : Controller
 
     private string BuildSmsPayload(QrCodeViewModel model)
     {
-        var phone = Require(model.PhoneNumber, nameof(model.PhoneNumber), "Wpisz numer telefonu.");
+        var phone = Require(model, model.PhoneNumber, nameof(model.PhoneNumber), "ValidationPhoneRequired");
 
         return string.IsNullOrWhiteSpace(model.SmsMessage)
             ? $"SMSTO:{phone}:"
@@ -212,24 +278,24 @@ public class HomeController : Controller
 
     private string BuildGeoPayload(QrCodeViewModel model)
     {
-        var latitude = Require(model.GeoLatitude, nameof(model.GeoLatitude), "Wpisz szerokosc geograficzna.");
-        var longitude = Require(model.GeoLongitude, nameof(model.GeoLongitude), "Wpisz dlugosc geograficzna.");
+        var latitude = Require(model, model.GeoLatitude, nameof(model.GeoLatitude), "ValidationLatitudeRequired");
+        var longitude = Require(model, model.GeoLongitude, nameof(model.GeoLongitude), "ValidationLongitudeRequired");
 
         return $"geo:{latitude},{longitude}";
     }
 
     private string BuildEventPayload(QrCodeViewModel model)
     {
-        var title = Require(model.EventTitle, nameof(model.EventTitle), "Wpisz nazwe wydarzenia.");
+        var title = Require(model, model.EventTitle, nameof(model.EventTitle), "ValidationEventTitleRequired");
 
         if (model.EventStart is null)
         {
-            ModelState.AddModelError(nameof(model.EventStart), "Wpisz date rozpoczecia.");
+            ModelState.AddModelError(nameof(model.EventStart), T(model, "ValidationEventStartRequired"));
         }
 
         if (model.EventEnd is null)
         {
-            ModelState.AddModelError(nameof(model.EventEnd), "Wpisz date zakonczenia.");
+            ModelState.AddModelError(nameof(model.EventEnd), T(model, "ValidationEventEndRequired"));
         }
 
         return string.Join("\n", new[]
@@ -245,7 +311,7 @@ public class HomeController : Controller
 
     private string BuildCryptoPayload(QrCodeViewModel model)
     {
-        var address = Require(model.CryptoAddress, nameof(model.CryptoAddress), "Wpisz adres portfela.");
+        var address = Require(model, model.CryptoAddress, nameof(model.CryptoAddress), "ValidationCryptoAddressRequired");
         var scheme = model.CryptoNetwork.Equals("ethereum", StringComparison.OrdinalIgnoreCase) ? "ethereum" : "bitcoin";
         var amount = string.IsNullOrWhiteSpace(model.CryptoAmount) ? string.Empty : $"?amount={Uri.EscapeDataString(model.CryptoAmount)}";
 
@@ -254,7 +320,7 @@ public class HomeController : Controller
 
     private string BuildMultiLinkPayload(QrCodeViewModel model)
     {
-        var links = Require(model.MultiLinks, nameof(model.MultiLinks), "Wpisz co najmniej jeden link.");
+        var links = Require(model, model.MultiLinks, nameof(model.MultiLinks), "ValidationMultiLinksRequired");
 
         return string.Join("\n", links
             .Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
@@ -263,12 +329,12 @@ public class HomeController : Controller
 
     private string BuildSocialPayload(QrCodeViewModel model)
     {
-        var url = Require(model.SocialUrl, nameof(model.SocialUrl), "Wpisz link do profilu social media.");
+        var url = Require(model, model.SocialUrl, nameof(model.SocialUrl), "ValidationSocialUrlRequired");
         var platform = NormalizeSocialPlatform(model.SocialPlatform);
 
         if (!IsValidSocialUrl(url, platform))
         {
-            ModelState.AddModelError(nameof(model.SocialUrl), "Link nie pasuje do wybranego serwisu social media.");
+            ModelState.AddModelError(nameof(model.SocialUrl), T(model, "ValidationSocialUrlMismatch"));
         }
 
         model.DesignEnabled = true;
@@ -416,13 +482,13 @@ public class HomeController : Controller
 
         if (!model.PrintImage.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            ModelState.AddModelError(nameof(model.PrintImage), "Plik musi byc obrazem.");
+            ModelState.AddModelError(nameof(model.PrintImage), T(model, "ValidationPrintImageType"));
             return;
         }
 
         if (model.PrintImage.Length > 3 * 1024 * 1024)
         {
-            ModelState.AddModelError(nameof(model.PrintImage), "Obrazek moze miec maksymalnie 3 MB.");
+            ModelState.AddModelError(nameof(model.PrintImage), T(model, "ValidationPrintImageSize"));
             return;
         }
 
@@ -441,13 +507,13 @@ public class HomeController : Controller
 
         if (!model.BrandingLogo.ContentType.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
         {
-            ModelState.AddModelError(nameof(model.BrandingLogo), "Logo musi byc obrazem.");
+            ModelState.AddModelError(nameof(model.BrandingLogo), T(model, "ValidationBrandingLogoType"));
             return;
         }
 
         if (model.BrandingLogo.Length > 2 * 1024 * 1024)
         {
-            ModelState.AddModelError(nameof(model.BrandingLogo), "Logo moze miec maksymalnie 2 MB.");
+            ModelState.AddModelError(nameof(model.BrandingLogo), T(model, "ValidationBrandingLogoSize"));
             return;
         }
 
