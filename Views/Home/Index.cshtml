@@ -1,64 +1,626 @@
 @model QRCodeGenerator.Models.QrCodeViewModel
+@using QRCodeGenerator.Services
 
 @{
-    ViewData["Title"] = "Generator QR";
+    ViewContext.ClientValidationEnabled = false;
+    var language = Model.Language;
+    ViewData["Title"] = UiText.Get(language, "HeroTitle");
+    var hasResult = Model.ShowResult;
+    var generatedPayload = Model.GeneratedPayload ?? string.Empty;
+    var sheetClass = Model.PrintFormat switch
+    {
+        "a5" => "sheet-a5",
+        "letter" => "sheet-letter",
+        "dl" => "sheet-dl",
+        "square" => "sheet-square",
+        _ => "sheet-a4"
+    };
+    var isValidated = Model.ValidationResult is not null;
+    var readabilityStars = Model.ValidationResult is null ? 0 : (int)Math.Ceiling(Model.ValidationResult.ReadabilityScore / 20.0);
+    var printSafetyStars = Model.ValidationResult is null ? 0 : (int)Math.Ceiling(Model.ValidationResult.PrintSafetyScore / 20.0);
+    var contentIcons = new Dictionary<string, string>
+    {
+        ["general"] = "edit_note",
+        ["url"] = "link",
+        ["wifi"] = "wifi",
+        ["vcard"] = "person",
+        ["email"] = "mail",
+        ["sms"] = "sms",
+        ["phone"] = "call",
+        ["geo"] = "location_on",
+        ["event"] = "event",
+        ["crypto"] = "account_balance_wallet",
+        ["app"] = "apps",
+        ["pdf"] = "picture_as_pdf",
+        ["social"] = "alternate_email",
+        ["multilink"] = "hub",
+        ["plain"] = "notes"
+    };
 }
 
-<section class="qr-shell">
-    <div class="qr-panel">
-        <div class="qr-heading">
-            <p class="qr-kicker">Statyczne kody QR</p>
-            <h1>Generator QR</h1>
-            <p>Wpisz tekst, wygeneruj kod i zapisz go lokalnie w wybranym formacie.</p>
+<section class="generator-stage">
+    <div class="ambient ambient-one"></div>
+    <div class="ambient ambient-two"></div>
+
+    <section class="hero-panel glass-panel">
+        <div class="hero-copy">
+            <span class="kicker">@UiText.Get(language, "HeroKicker")</span>
+            <h1>@UiText.Get(language, "HeroTitle")</h1>
+            <p>@UiText.Get(language, "HeroCopy")</p>
         </div>
 
-        <form asp-action="Index" method="post" class="qr-form">
-            @Html.AntiForgeryToken()
-            <label asp-for="Text" class="form-label"></label>
-            <div class="input-group input-group-lg">
-                <input asp-for="Text" class="form-control" placeholder="np. https://example.com albo dowolny tekst" autocomplete="off" />
-                <button class="btn btn-primary" type="submit">Generuj</button>
-            </div>
-            <span asp-validation-for="Text" class="text-danger"></span>
-        </form>
-    </div>
-</section>
+        <div class="workspace-grid">
+            <form asp-action="Index" method="post" enctype="multipart/form-data" class="config-panel" novalidate>
+                @Html.AntiForgeryToken()
+                <div asp-validation-summary="ModelOnly" class="validation-summary"></div>
 
-@if (Model.ShowResult)
-{
-    <div class="modal fade" id="qrResultModal" tabindex="-1" aria-labelledby="qrResultModalLabel" aria-hidden="true">
-        <div class="modal-dialog modal-dialog-centered">
-            <div class="modal-content">
-                <div class="modal-header">
-                    <h2 class="modal-title fs-5" id="qrResultModalLabel">Wygenerowany kod QR</h2>
-                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Zamknij"></button>
+                <div class="field-block">
+                    <span class="field-label">@UiText.Get(language, "ContentType")</span>
+                    <div class="content-picker" role="radiogroup" aria-label="@UiText.Get(language, "ContentType")">
+                        @foreach (var option in Model.ContentTypeOptions)
+                        {
+                            var id = $"content-{option.Value}";
+                            var icon = contentIcons.TryGetValue(option.Value, out var iconName) ? iconName : "qr_code";
+                            <input class="visually-hidden content-radio" type="radio" asp-for="ContentType" id="@id" value="@option.Value" />
+                            <label class="content-chip" for="@id">
+                                <span class="material-symbols-outlined">@icon</span>
+                                <span>@UiText.Get(language, $"ContentType_{option.Value}")</span>
+                            </label>
+                        }
+                    </div>
                 </div>
-                <div class="modal-body text-center">
-                    <img class="qr-preview" src="@Model.PngDataUri" alt="Wygenerowany kod QR" />
-                    <div class="download-actions">
+
+                <div class="error-correction-row">
+                    <span class="field-label">@UiText.Get(language, "ErrorCorrectionLevel")</span>
+                    <div class="ecc-toggle-group" role="radiogroup" aria-label="@UiText.Get(language, "ErrorCorrectionLevel")">
+                        @foreach (var option in Model.ErrorCorrectionOptions)
+                        {
+                            var id = $"ecc-{option.Value}";
+                            <input class="visually-hidden ecc-radio" type="radio" asp-for="ErrorCorrectionLevel" id="@id" value="@option.Value" />
+                            <label class="ecc-toggle" for="@id" aria-label="@option.Label">@option.Value</label>
+                        }
+                    </div>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="general">
+                    <label asp-for="Text" class="field-label">@UiText.Get(language, "Text")</label>
+                    <textarea asp-for="Text" class="neo-input" rows="4" placeholder="@UiText.Get(language, "TextPlaceholder")"></textarea>
+                    <span asp-validation-for="Text" class="field-error"></span>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="url">
+                    <label asp-for="Url" class="field-label">@UiText.Get(language, "Url")</label>
+                    <input asp-for="Url" class="neo-input input-lg" placeholder="https://example.com" />
+                    <span asp-validation-for="Url" class="field-error"></span>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="wifi">
+                    <div>
+                        <label asp-for="WifiSsid" class="field-label">@UiText.Get(language, "WifiSsid")</label>
+                        <input asp-for="WifiSsid" class="neo-input" />
+                        <span asp-validation-for="WifiSsid" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="WifiPassword" class="field-label">@UiText.Get(language, "WifiPassword")</label>
+                        <input asp-for="WifiPassword" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="WifiEncryption" class="field-label">@UiText.Get(language, "WifiEncryption")</label>
+                        <select asp-for="WifiEncryption" class="neo-input">
+                            <option value="WPA">WPA/WPA2/WPA3</option>
+                            <option value="WEP">WEP</option>
+                            <option value="nopass">@UiText.Get(language, "NoPassword")</option>
+                        </select>
+                    </div>
+                    <label class="toggle-line">
+                        <input asp-for="WifiHidden" type="checkbox" />
+                        <span>@UiText.Get(language, "WifiHidden")</span>
+                    </label>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="vcard">
+                    <div>
+                        <label asp-for="VCardName" class="field-label">@UiText.Get(language, "VCardName")</label>
+                        <input asp-for="VCardName" class="neo-input" />
+                        <span asp-validation-for="VCardName" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="VCardCompany" class="field-label">@UiText.Get(language, "VCardCompany")</label>
+                        <input asp-for="VCardCompany" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardJobTitle" class="field-label">@UiText.Get(language, "VCardJobTitle")</label>
+                        <input asp-for="VCardJobTitle" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardPhone" class="field-label">@UiText.Get(language, "VCardPhone")</label>
+                        <input asp-for="VCardPhone" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="VCardEmail" class="field-label">@UiText.Get(language, "VCardEmail")</label>
+                        <input asp-for="VCardEmail" class="neo-input" />
+                    </div>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="email">
+                    <div>
+                        <label asp-for="EmailAddress" class="field-label">@UiText.Get(language, "EmailAddress")</label>
+                        <input asp-for="EmailAddress" class="neo-input" placeholder="hello@example.com" />
+                        <span asp-validation-for="EmailAddress" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EmailSubject" class="field-label">@UiText.Get(language, "EmailSubject")</label>
+                        <input asp-for="EmailSubject" class="neo-input" />
+                    </div>
+                    <div class="span-all">
+                        <label asp-for="EmailBody" class="field-label">@UiText.Get(language, "EmailBody")</label>
+                        <textarea asp-for="EmailBody" class="neo-input" rows="3"></textarea>
+                    </div>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="sms">
+                    <div>
+                        <label asp-for="PhoneNumber" class="field-label">@UiText.Get(language, "PhoneNumber")</label>
+                        <input asp-for="PhoneNumber" class="neo-input" />
+                        <span asp-validation-for="PhoneNumber" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="SmsMessage" class="field-label">@UiText.Get(language, "SmsMessage")</label>
+                        <input asp-for="SmsMessage" class="neo-input" />
+                    </div>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="phone">
+                    <label asp-for="PhoneNumber" class="field-label">@UiText.Get(language, "PhoneNumber")</label>
+                    <input asp-for="PhoneNumber" class="neo-input input-lg" placeholder="+48123123123" />
+                    <span asp-validation-for="PhoneNumber" class="field-error"></span>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="geo">
+                    <div>
+                        <label asp-for="GeoLatitude" class="field-label">@UiText.Get(language, "GeoLatitude")</label>
+                        <input asp-for="GeoLatitude" class="neo-input" placeholder="52.2297" />
+                        <span asp-validation-for="GeoLatitude" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="GeoLongitude" class="field-label">@UiText.Get(language, "GeoLongitude")</label>
+                        <input asp-for="GeoLongitude" class="neo-input" placeholder="21.0122" />
+                        <span asp-validation-for="GeoLongitude" class="field-error"></span>
+                    </div>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="event">
+                    <div>
+                        <label asp-for="EventTitle" class="field-label">@UiText.Get(language, "EventTitle")</label>
+                        <input asp-for="EventTitle" class="neo-input" />
+                        <span asp-validation-for="EventTitle" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EventLocation" class="field-label">@UiText.Get(language, "EventLocation")</label>
+                        <input asp-for="EventLocation" class="neo-input" />
+                    </div>
+                    <div>
+                        <label asp-for="EventStart" class="field-label">@UiText.Get(language, "EventStart")</label>
+                        <input asp-for="EventStart" class="neo-input" type="datetime-local" />
+                        <span asp-validation-for="EventStart" class="field-error"></span>
+                    </div>
+                    <div>
+                        <label asp-for="EventEnd" class="field-label">@UiText.Get(language, "EventEnd")</label>
+                        <input asp-for="EventEnd" class="neo-input" type="datetime-local" />
+                        <span asp-validation-for="EventEnd" class="field-error"></span>
+                    </div>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="crypto">
+                    <div>
+                        <label asp-for="CryptoNetwork" class="field-label">@UiText.Get(language, "CryptoNetwork")</label>
+                        <select asp-for="CryptoNetwork" class="neo-input">
+                            <option value="bitcoin">BTC</option>
+                            <option value="ethereum">ETH</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label asp-for="CryptoAmount" class="field-label">@UiText.Get(language, "CryptoAmount")</label>
+                        <input asp-for="CryptoAmount" class="neo-input" placeholder="0.01" />
+                    </div>
+                    <div class="span-all">
+                        <label asp-for="CryptoAddress" class="field-label">@UiText.Get(language, "CryptoAddress")</label>
+                        <input asp-for="CryptoAddress" class="neo-input" />
+                        <span asp-validation-for="CryptoAddress" class="field-error"></span>
+                    </div>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="app">
+                    <label asp-for="AppStoreUrl" class="field-label">@UiText.Get(language, "AppStoreUrl")</label>
+                    <input asp-for="AppStoreUrl" class="neo-input input-lg" placeholder="https://apps.apple.com/... / https://play.google.com/..." />
+                    <span asp-validation-for="AppStoreUrl" class="field-error"></span>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="pdf">
+                    <label asp-for="PdfUrl" class="field-label">@UiText.Get(language, "PdfUrl")</label>
+                    <input asp-for="PdfUrl" class="neo-input input-lg" placeholder="https://example.com/document.pdf" />
+                    <span asp-validation-for="PdfUrl" class="field-error"></span>
+                </div>
+
+                <div class="form-grid content-panel" data-content-panel="social">
+                    <div>
+                        <label asp-for="SocialPlatform" class="field-label">@UiText.Get(language, "SocialPlatform")</label>
+                        <select asp-for="SocialPlatform" class="neo-input">
+                            <option value="instagram">Instagram</option>
+                            <option value="linkedin">LinkedIn</option>
+                            <option value="x">X</option>
+                            <option value="facebook">Facebook</option>
+                            <option value="youtube">YouTube</option>
+                            <option value="tiktok">TikTok</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label asp-for="SocialUrl" class="field-label">@UiText.Get(language, "SocialUrl")</label>
+                        <input asp-for="SocialUrl" class="neo-input" placeholder="https://instagram.com/..." />
+                        <span asp-validation-for="SocialUrl" class="field-error"></span>
+                    </div>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="multilink">
+                    <label asp-for="MultiLinks" class="field-label">@UiText.Get(language, "MultiLinks")</label>
+                    <textarea asp-for="MultiLinks" class="neo-input" rows="5" placeholder="@UiText.Get(language, "MultiLinksPlaceholder")"></textarea>
+                    <span asp-validation-for="MultiLinks" class="field-error"></span>
+                </div>
+
+                <div class="field-block content-panel" data-content-panel="plain">
+                    <label asp-for="Text" class="field-label">@UiText.Get(language, "Text")</label>
+                    <textarea asp-for="Text" class="neo-input" rows="4" placeholder="@UiText.Get(language, "TextPlaceholder")"></textarea>
+                    <span asp-validation-for="Text" class="field-error"></span>
+                </div>
+
+                <button class="generate-button" type="submit">
+                    <span>@UiText.Get(language, "Generate")</span>
+                    <span class="material-symbols-outlined">qr_code_2</span>
+                </button>
+            </form>
+
+            <aside class="preview-panel">
+                <div class="qr-orbit">
+                    <div class="qr-glow"></div>
+                    <div class="qr-card @(hasResult ? "modifiable-qr" : "placeholder-card")" id="mainQrPreview" data-original-src="@Model.PngDataUri">
+                        @if (hasResult)
+                        {
+                            <img src="@Model.PngDataUri" alt="@UiText.Get(language, "GeneratedQr")" />
+                            <span class="qr-cta-preview"></span>
+                        }
+                        else
+                        {
+                            <img class="placeholder-preview-image" src="~/img/placeholder.png" asp-append-version="true" alt="@UiText.Get(language, "PreviewHint")" />
+                        }
+                    </div>
+                </div>
+
+                    <div class="preview-status"
+                         data-preview-status
+                         data-generated-label="@UiText.Get(language, "GeneratedQr")"
+                         data-awaiting-label="@UiText.Get(language, "AwaitingQr")"
+                         data-preview-hint="@UiText.Get(language, "PreviewHint")">
+                    <span class="status-dot mr-2 @(hasResult ? "active" : "")"></span>
+                    <div>
+                        <strong>@(hasResult ? UiText.Get(language, "GeneratedQr") : UiText.Get(language, "AwaitingQr"))</strong>
+                        <p>@(hasResult ? generatedPayload : UiText.Get(language, "PreviewHint"))</p>
+                    </div>
+                </div>
+                <input type="hidden" data-generated-payload value="@generatedPayload" />
+
+                    <div class="download-row" data-result-only hidden="@(!hasResult)">
                         @foreach (var format in Model.Formats)
                         {
                             <form asp-action="Download" method="post">
                                 @Html.AntiForgeryToken()
-                                <input type="hidden" name="text" value="@Model.Text" />
+                                <input type="hidden" name="text" value="@generatedPayload" />
                                 <input type="hidden" name="format" value="@format.Value" />
-                                <button class="btn btn-outline-primary" type="submit">Zapisz @format.Label</button>
+                                <input type="hidden" name="errorCorrectionLevel" value="@Model.ErrorCorrectionLevel" />
+                                <button class="download-button" type="submit">
+                                    <span class="material-symbols-outlined">download</span>
+                                    <span>@format.Label</span>
+                                </button>
                             </form>
                         }
+                    </div>
+                    <div class="preview-action-row" data-result-only hidden="@(!hasResult)">
+                        <button class="secondary-button" type="button" data-bs-toggle="modal" data-bs-target="#qrModifyModal">
+                            <span class="material-symbols-outlined">tune</span>
+                            <span>@UiText.Get(language, "ModifyImage")</span>
+                        </button>
+                        <button class="secondary-button" type="button" data-bs-toggle="modal" data-bs-target="#qrPrintModal">
+                            <span class="material-symbols-outlined">print</span>
+                            <span>@UiText.Get(language, "OpenPrintPanel")</span>
+                        </button>
+                    </div>
+            </aside>
+        </div>
+    </section>
+</section>
+
+    <div class="modal fade result-modal" id="qrModifyModal" tabindex="-1" aria-labelledby="qrModifyModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title" id="qrModifyModalLabel">@UiText.Get(language, "ModifyImage")</h2>
+                        <p>@UiText.Get(language, "ModifyImageCopy")</p>
+                    </div>
+                    <button type="button" class="modal-close" data-bs-dismiss="modal" aria-label="@UiText.Get(language, "Close")">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="result-grid modify-grid">
+                        <div class="result-left">
+                            <div class="qr-card modal-qr modifiable-qr" id="modifyQrPreview" data-original-src="@Model.PngDataUri">
+                                <img src="@(hasResult ? Model.PngDataUri : Url.Content("~/img/placeholder.png"))" alt="@UiText.Get(language, "GeneratedQr")" />
+                                <span class="qr-cta-preview"></span>
+                            </div>
+                            <div class="version-note">
+                                <strong>@UiText.Get(language, "OriginalVersion")</strong>
+                                <span>@UiText.Get(language, "CurrentVersion")</span>
+                            </div>
+                            <div class="qr-risk-zone">
+                                <button class="qr-risk-dot" type="button" data-qr-risk-dot aria-label="@UiText.Get(language, "QrModificationWarning")"></button>
+                                <div class="qr-risk-alert" data-qr-risk-alert hidden>
+                                    <span class="material-symbols-outlined">warning</span>
+                                    <span>@UiText.Get(language, "QrModificationWarning")</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="result-right">
+                            <div class="advanced-grid modal-settings-grid" data-qr-settings>
+                                <div>
+                                    <label for="modifyDesignTemplate" class="field-label">@UiText.Get(language, "DesignTemplate")</label>
+                                    <select id="modifyDesignTemplate" class="neo-input" data-qr-setting="template">
+                                        @foreach (var option in Model.DesignTemplateOptions.Where(option => option.Value is not ("brand" or "event")))
+                                        {
+                                            <option value="@option.Value" selected="@(Model.DesignTemplate == option.Value)">@option.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div>
+                                    <label for="modifyFrameStyle" class="field-label">@UiText.Get(language, "FrameStyle")</label>
+                                    <select id="modifyFrameStyle" class="neo-input" data-qr-setting="frame">
+                                        @foreach (var option in Model.FrameStyleOptions)
+                                        {
+                                            <option value="@option.Value" selected="@(Model.FrameStyle == option.Value)">@option.Label</option>
+                                        }
+                                    </select>
+                                </div>
+                                <div class="span-all modify-checkbox-row">
+                                    <label class="toggle-line">
+                                        <input type="checkbox" data-qr-setting="rounded" checked="@Model.RoundedModules" />
+                                        <span>@UiText.Get(language, "RoundedModules")</span>
+                                    </label>
+                                    <label class="toggle-line">
+                                        <input type="checkbox" data-qr-setting="designEnabled" checked="@Model.DesignEnabled" />
+                                        <span>@UiText.Get(language, "DesignEnabled")</span>
+                                    </label>
+                                    <label class="toggle-line">
+                                        <input type="checkbox" data-qr-setting="darkMode" checked="@Model.DarkMode" />
+                                        <span>@UiText.Get(language, "DarkMode")</span>
+                                    </label>
+                                </div>
+                                <div class="span-all modify-color-row">
+                                    <div>
+                                        <label for="modifyGradient" class="field-label">@UiText.Get(language, "QrDesignGradient")</label>
+                                        <select id="modifyGradient" class="neo-input" data-qr-setting="gradient">
+                                            @foreach (var option in Model.QrDesignGradientOptions)
+                                            {
+                                                <option value="@option.Value" selected="@(Model.QrDesignGradient == option.Value)">@option.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div class="compact-color-field">
+                                        <label for="modifyForegroundColor" class="field-label">@UiText.Get(language, "ForegroundColor")</label>
+                                        <input id="modifyForegroundColor" class="color-dot-input" type="color" value="@Model.ForegroundColor" data-qr-setting="foreground" />
+                                    </div>
+                                    <div class="compact-color-field">
+                                        <label for="modifyBackgroundColor" class="field-label">@UiText.Get(language, "BackgroundColor")</label>
+                                        <input id="modifyBackgroundColor" class="color-dot-input" type="color" value="@Model.BackgroundColor" data-qr-setting="background" />
+                                    </div>
+                                </div>
+                                <div class="span-all">
+                                    <label for="modifyLogoInput" class="field-label">@UiText.Get(language, "BrandingLogo")</label>
+                                    <label class="logo-dropzone" data-logo-dropzone="modify" for="modifyLogoInput">
+                                        <input id="modifyLogoInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" data-logo-input />
+                                        <span class="material-symbols-outlined">add_photo_alternate</span>
+                                        <span data-logo-dropzone-text="modify" data-default-text="@UiText.Get(language, "BrandingLogoHelp")">@UiText.Get(language, "BrandingLogoHelp")</span>
+                                    </label>
+                                    <small class="logo-error" data-logo-error="modify" hidden>@UiText.Get(language, "BrandingLogoError")</small>
+                                </div>
+                                <div class="span-all">
+                                    <label for="modifyCtaText" class="field-label">@UiText.Get(language, "CtaText")</label>
+                                    <input id="modifyCtaText" class="neo-input" value="@Model.CtaText" data-qr-setting="cta" />
+                                </div>
+                            </div>
+                            <div class="modal-actions">
+                                <button class="secondary-button" type="button" data-reset-qr-settings>
+                                    <span class="material-symbols-outlined">restart_alt</span>
+                                    <span>@UiText.Get(language, "ResetDefaults")</span>
+                                </button>
+                                <button class="generate-button compact" type="button" data-apply-qr-settings data-bs-dismiss="modal">
+                                    <span class="material-symbols-outlined">check</span>
+                                    <span>@UiText.Get(language, "ApplyChanges")</span>
+                                </button>
+                            </div>
+                        </div>
                     </div>
                 </div>
             </div>
         </div>
     </div>
-}
 
-@section Scripts {
-    <partial name="_ValidationScriptsPartial" />
-    @if (Model.ShowResult)
-    {
-        <script>
-            const qrModal = new bootstrap.Modal(document.getElementById('qrResultModal'));
-            qrModal.show();
-        </script>
-    }
-}
+    <div class="modal fade result-modal" id="qrPrintModal" tabindex="-1" aria-labelledby="qrPrintModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content glass-panel">
+                <div class="modal-header">
+                    <div>
+                        <h2 class="modal-title" id="qrPrintModalLabel">@UiText.Get(language, "PrintSettings")</h2>
+                        <p>@UiText.Get(language, "PrintSettingsCopy")</p>
+                    </div>
+                    <button type="button" class="modal-close" data-bs-dismiss="modal" aria-label="@UiText.Get(language, "Close")">
+                        <span class="material-symbols-outlined">close</span>
+                    </button>
+                </div>
+                <div class="modal-body">
+                    <div class="result-grid print-modal-grid">
+                        <div class="result-left glass-mini">
+                            <h3>@UiText.Get(language, "PrintSettings")</h3>
+                            <div class="advanced-grid modal-settings-grid" data-print-settings>
+                                <div class="print-settings-section span-all">
+                                    <div>
+                                        <label for="printFormat" class="field-label">@UiText.Get(language, "PrintFormat")</label>
+                                        <select id="printFormat" class="neo-input" data-print-setting="format">
+                                            @foreach (var option in Model.PrintFormatOptions)
+                                            {
+                                                <option value="@option.Value" selected="@(Model.PrintFormat == option.Value)">@option.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="printGradient" class="field-label">@UiText.Get(language, "PrintGradient")</label>
+                                        <select id="printGradient" class="neo-input" data-print-setting="gradient">
+                                            <option value="none" selected>@UiText.Get(language, "None")</option>
+                                            @foreach (var option in Model.PrintGradientOptions)
+                                            {
+                                                <option value="@option.Value">@option.Label</option>
+                                            }
+                                        </select>
+                                    </div>
+                                    <div>
+                                        <label for="printTitle" class="field-label">@UiText.Get(language, "PrintTitle")</label>
+                                        <input id="printTitle" class="neo-input" value="@Model.PrintTitle" data-print-setting="title" />
+                                    </div>
+                                    <div class="span-all">
+                                        <label for="printDescription" class="field-label">@UiText.Get(language, "PrintDescription")</label>
+                                        <textarea id="printDescription" class="neo-input" rows="3" data-print-setting="description">@Model.PrintDescription</textarea>
+                                    </div>
+                                </div>
+                                <div class="print-settings-section span-all">
+                                    <div>
+                                        <label for="printQrTitle" class="field-label">@UiText.Get(language, "QrTitle")</label>
+                                        <input id="printQrTitle" class="neo-input" data-print-setting="qrTitle" />
+                                    </div>
+                                    <div>
+                                        <label for="printLabel" class="field-label">@UiText.Get(language, "PrintLabel")</label>
+                                        <input id="printLabel" class="neo-input" value="@Model.PrintLabel" data-print-setting="label" />
+                                    </div>
+                                    <div class="print-label-options span-all">
+                                        <div class="compact-color-field">
+                                            <label for="printLabelBackground" class="field-label">@UiText.Get(language, "PrintLabelBackground")</label>
+                                            <input id="printLabelBackground" class="color-dot-input" type="color" value="#111827" data-print-setting="labelBackground" />
+                                        </div>
+                                        <div class="compact-color-field">
+                                            <label for="printLabelText" class="field-label">@UiText.Get(language, "PrintLabelText")</label>
+                                            <input id="printLabelText" class="color-dot-input" type="color" value="#ffffff" data-print-setting="labelText" />
+                                        </div>
+                                        <div class="compact-check-field">
+                                            <span class="field-label">@UiText.Get(language, "CutLines")</span>
+                                            <label class="inset-check">
+                                                <input type="checkbox" data-print-setting="cutLines" />
+                                                <span>@UiText.Get(language, "CutLines")</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="print-settings-section span-all">
+                                    <div>
+                                        <label for="printQrSize" class="field-label">@UiText.Get(language, "QrPrintSizeMm")</label>
+                                        <input id="printQrSize" class="neo-input" type="number" min="20" max="180" value="@Model.QrPrintSizeMm" data-print-setting="qrSize" />
+                                    </div>
+                                    <div>
+                                        <label for="printMargin" class="field-label">@UiText.Get(language, "PrintMarginMm")</label>
+                                        <input id="printMargin" class="neo-input" type="number" min="0" max="40" value="@Model.PrintMarginMm" data-print-setting="margin" />
+                                    </div>
+                                    <div>
+                                        <label for="printBleed" class="field-label">@UiText.Get(language, "PrintBleedMm")</label>
+                                        <input id="printBleed" class="neo-input" type="number" min="0" max="8" value="@Model.PrintBleedMm" data-print-setting="bleed" />
+                                    </div>
+                                    <div>
+                                        <label for="printCopies" class="field-label">@UiText.Get(language, "Copies")</label>
+                                        <input id="printCopies" class="neo-input" type="number" min="1" max="48" value="1" data-print-setting="copies" />
+                                    </div>
+                                    <div>
+                                        <label for="printCopyGap" class="field-label">@UiText.Get(language, "CopyGapMm")</label>
+                                        <input id="printCopyGap" class="neo-input" type="number" min="0" max="30" value="6" data-print-setting="copyGap" />
+                                    </div>
+                                    <div>
+                                        <label for="printContentAlign" class="field-label">@UiText.Get(language, "PrintContentAlign")</label>
+                                        <select id="printContentAlign" class="neo-input" data-print-setting="contentAlign">
+                                            <option value="center" selected>@UiText.Get(language, "PrintContentAlignCenter")</option>
+                                            <option value="top">@UiText.Get(language, "PrintContentAlignTop")</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div class="print-settings-section span-all">
+                                    <div class="span-all">
+                                        <label for="printLogo" class="field-label">@UiText.Get(language, "PrintLogo")</label>
+                                        <label class="logo-dropzone compact-logo-dropzone" data-logo-dropzone="print" for="printLogo">
+                                            <input id="printLogo" type="file" accept="image/png,image/jpeg,image/webp,image/gif,image/bmp" data-print-logo-input />
+                                            <span class="material-symbols-outlined">add_photo_alternate</span>
+                                            <span data-logo-dropzone-text="print" data-default-text="@UiText.Get(language, "BrandingLogoHelp")">@UiText.Get(language, "BrandingLogoHelp")</span>
+                                        </label>
+                                        <small class="logo-error" data-logo-error="print" hidden>@UiText.Get(language, "BrandingLogoError")</small>
+                                    </div>
+                                    <div>
+                                        <label for="printLogoSize" class="field-label">@UiText.Get(language, "PrintLogoSize")</label>
+                                        <input id="printLogoSize" class="neo-input" type="number" min="50" max="100" value="50" data-print-setting="logoScale" />
+                                    </div>
+                                    <div>
+                                        <label for="printLogoPosition" class="field-label">@UiText.Get(language, "LogoPosition")</label>
+                                        <select id="printLogoPosition" class="neo-input" data-print-setting="logoPosition">
+                                            <option value="right">@UiText.Get(language, "Right")</option>
+                                            <option value="left">@UiText.Get(language, "Left")</option>
+                                            <option value="top">@UiText.Get(language, "Top")</option>
+                                            <option value="bottom">@UiText.Get(language, "Bottom")</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            <button class="generate-button compact full" type="button" onclick="window.print()">
+                                <span class="material-symbols-outlined">print</span>
+                                <span>@UiText.Get(language, "PrintSavePdf")</span>
+                            </button>
+                        </div>
+
+                        <div class="result-right">
+                            <div class="print-preview-toolbar">
+                                <button class="icon-button" type="button" data-print-zoom="out" aria-label="@UiText.Get(language, "ZoomOut")">
+                                    <span class="material-symbols-outlined">remove</span>
+                                </button>
+                                <button class="icon-button" type="button" data-print-zoom="in" aria-label="@UiText.Get(language, "ZoomIn")">
+                                    <span class="material-symbols-outlined">add</span>
+                                </button>
+                            </div>
+                            <div id="printArea" class="print-area">
+                                <article class="print-sheet @sheetClass gradient-none" data-print-sheet data-print-page-template style="--print-margin: @(Model.PrintMarginMm)mm; --print-bleed: @(Model.PrintBleedMm)mm; --qr-size: @(Model.QrPrintSizeMm)mm; --copy-gap: 6mm; --print-logo-size: 50%;">
+                                    <div class="bleed-guide"></div>
+                                    <div class="print-content">
+                                        <h2 data-print-title hidden="@string.IsNullOrWhiteSpace(Model.PrintTitle)">@Model.PrintTitle</h2>
+                                        <p data-print-description hidden="@string.IsNullOrWhiteSpace(Model.PrintDescription)">@Model.PrintDescription</p>
+                                        <div class="print-copies" data-print-copies>
+                                            <div class="print-copy" data-print-copy-template>
+                                                <span class="print-qr-title" data-print-qr-title hidden></span>
+                                                <div class="print-qr-lockup logo-right" data-print-lockup>
+                                                    <img class="print-logo" data-print-logo alt="" hidden />
+                                                    <div class="print-qr modifiable-qr" data-print-qr>
+                                                        <img src="@(hasResult ? Model.PngDataUri : Url.Content("~/img/placeholder.png"))" alt="@UiText.Get(language, "GeneratedQr")" />
+                                                        <span class="qr-cta-preview"></span>
+                                                    </div>
+                                                </div>
+                                                <span class="print-label" data-print-label hidden>@Model.PrintLabel</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </article>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>

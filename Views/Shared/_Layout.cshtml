@@ -1,44 +1,84 @@
-﻿<!DOCTYPE html>
-<html lang="pl">
+@using QRCodeGenerator.Services
+@{
+    var language = ViewData["Language"] as string ?? "pl";
+    var theme = ViewData["Theme"] as string ?? "light";
+    var isDark = theme == "dark";
+    var currentPath = $"{Context.Request.Path}{Context.Request.QueryString}";
+    var title = ViewData["Title"] as string ?? UiText.Get(language, "AppName");
+}
+<!DOCTYPE html>
+<html class="@(isDark ? "dark" : "light")" lang="@(language == "en" ? "en" : "pl")">
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>@ViewData["Title"] - Generator QR</title>
-    <script type="importmap"></script>
+    <title>@title - @UiText.Get(language, "AppName")</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+    <link rel="icon" type="image/png" href="~/favicon.png" asp-append-version="true" />
     <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css" />
     <link rel="stylesheet" href="~/css/site.css" asp-append-version="true" />
     <link rel="stylesheet" href="~/QRCodeGenerator.styles.css" asp-append-version="true" />
 </head>
-<body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">Generator QR</a>
-                <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target=".navbar-collapse" aria-controls="navbarSupportedContent"
-                        aria-expanded="false" aria-label="Toggle navigation">
-                    <span class="navbar-toggler-icon"></span>
-                </button>
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
-                            <a class="nav-link text-dark" asp-area="" asp-controller="Home" asp-action="Index">Start</a>
-                        </li>
-                    </ul>
-                </div>
+<body class="app-shell" data-theme-preference="@theme" data-language="@language">
+    <header class="top-shell">
+        <nav class="top-nav" aria-label="Primary">
+            <a class="brand-mark" asp-area="" asp-controller="Home" asp-action="Index" aria-label="@UiText.Get(language, "AppName")">
+                <img src="~/icon.png" asp-append-version="true" alt="" />
+                <span>QRGenerator</span>
+            </a>
+
+            <div class="nav-links">
+                <a class="nav-link mx-1 @(ViewContext.RouteData.Values["action"]?.ToString() == "Index" ? "active" : "")" asp-area="" asp-controller="Home" asp-action="Index">@UiText.Get(language, "StaticQr")</a>
+                <a class="nav-link mx-1 @(ViewContext.RouteData.Values["action"]?.ToString() == "Dynamic" ? "active" : "")" asp-area="" asp-controller="Home" asp-action="Dynamic">@UiText.Get(language, "DynamicQr")</a>
+            </div>
+
+            <div class="nav-actions">
+                <form asp-controller="Home" asp-action="SetPreferences" method="post" class="icon-switcher" data-preferences-form aria-label="@UiText.Get(language, "Language")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@currentPath" />
+                    <input type="hidden" name="theme" value="@theme" />
+                    <button class="icon-button @(language == "pl" ? "active" : "")" name="language" value="pl" type="submit" title="Polski">PL</button>
+                    <button class="icon-button @(language == "en" ? "active" : "")" name="language" value="en" type="submit" title="English">US</button>
+                </form>
+                <form asp-controller="Home" asp-action="SetPreferences" method="post" class="icon-switcher" data-preferences-form aria-label="@UiText.Get(language, "Theme")">
+                    @Html.AntiForgeryToken()
+                    <input type="hidden" name="returnUrl" value="@currentPath" />
+                    <input type="hidden" name="language" value="@language" />
+                    <button class="icon-button @(theme == "light" ? "active" : "")" name="theme" value="light" type="submit" title="@UiText.Get(language, "Light")">
+                        <span class="material-symbols-outlined">light_mode</span>
+                    </button>
+                    <button class="icon-button @(theme == "dark" ? "active" : "")" name="theme" value="dark" type="submit" title="@UiText.Get(language, "Dark")">
+                        <span class="material-symbols-outlined">dark_mode</span>
+                    </button>
+                </form>
             </div>
         </nav>
     </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-    </div>
 
-    <footer class="border-top footer text-muted">
-        <div class="container">
-            &copy; 2026 - Generator QR
+    <main class="main-canvas" role="main">
+        @RenderBody()
+    </main>
+
+    <footer class="footer-shell">
+        <div class="footer-inner">
+            <p class="footer-copy">2026 QRGenerator&copy; FPSokołowski</p>
+            <div class="footer-links">
+               
+                <a class="footer-social-link" href="https://github.com/FPSokolowski/QRCodeGenerator" target="_blank" rel="noopener noreferrer">
+                    <svg class="footer-social-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+                        <path fill="currentColor" d="M12 2C6.48 2 2 6.58 2 12.24c0 4.52 2.87 8.35 6.84 9.71.5.09.68-.22.68-.49 0-.24-.01-1.05-.01-1.9-2.78.62-3.37-1.22-3.37-1.22-.45-1.18-1.11-1.49-1.11-1.49-.91-.64.07-.63.07-.63 1 .07 1.53 1.06 1.53 1.06.9 1.57 2.35 1.12 2.92.85.09-.67.35-1.12.63-1.38-2.22-.26-4.55-1.14-4.55-5.06 0-1.12.39-2.03 1.03-2.75-.1-.26-.45-1.31.1-2.71 0 0 .84-.28 2.75 1.05A9.34 9.34 0 0 1 12 5.94c.85 0 1.7.12 2.5.35 1.9-1.33 2.74-1.05 2.74-1.05.55 1.4.2 2.45.1 2.71.64.72 1.03 1.63 1.03 2.75 0 3.93-2.34 4.8-4.57 5.05.36.32.68.94.68 1.9 0 1.38-.01 2.49-.01 2.83 0 .27.18.59.69.49A10.08 10.08 0 0 0 22 12.24C22 6.58 17.52 2 12 2Z" />
+                    </svg>
+                    <span>GitHub</span>
+                </a>
+                <a class="footer-social-link" href="https://sokolowskifilip.pl" target="_blank" rel="noopener noreferrer">
+                    <span class="footer-social-icon footer-falcon-icon" aria-hidden="true"></span>
+                    <span>Author</span>
+                </a>
+            </div>
         </div>
     </footer>
+
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
